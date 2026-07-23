@@ -233,6 +233,7 @@ function renderTable(list) {
           <button class="btn btn-outline btn-sm edit-claim-btn" data-id="${c.id}">✏️</button>
           ${c.status !== CLAIM_STATUS.APPROVED ? `<button class="btn btn-outline btn-sm approve-btn" data-id="${c.id}" title="${T.btnApprove.th}">✅</button>` : ""}
           ${c.status !== CLAIM_STATUS.REJECTED ? `<button class="btn btn-outline btn-sm reject-btn" data-id="${c.id}" title="${T.btnReject.th}">❌</button>` : ""}
+          <button class="btn btn-outline btn-sm send-approval-link-btn" data-id="${c.id}" title="Send approval link to management / ส่งลิงก์อนุมัติให้ผู้บริหาร / 发送审批链接给管理层">🔗</button>
         </td>
       </tr>`;
     })
@@ -253,7 +254,30 @@ function renderTable(list) {
   tbody.querySelectorAll(".reject-btn").forEach((btn) => {
     btn.addEventListener("click", () => setStatus(btn.dataset.id, CLAIM_STATUS.REJECTED));
   });
+  tbody.querySelectorAll(".send-approval-link-btn").forEach((btn) => {
+    btn.addEventListener("click", () => showApprovalLink(btn.dataset.id));
+  });
 }
+
+// ---------------- ลิงก์อนุมัติสำหรับผู้บริหาร (ไม่ต้องล็อกอิน) ----------------
+function showApprovalLink(id) {
+  const link = `${window.location.origin}${window.location.pathname.replace(/admin\.html$/, "")}approve.html?claim=${id}`;
+  document.getElementById("claim-link-output").value = link;
+  document.getElementById("claim-link-modal").style.display = "flex";
+}
+document.getElementById("close-claim-link-modal").addEventListener("click", () => {
+  document.getElementById("claim-link-modal").style.display = "none";
+});
+document.getElementById("copy-claim-link-btn").addEventListener("click", async () => {
+  const input = document.getElementById("claim-link-output");
+  input.select();
+  try {
+    await navigator.clipboard.writeText(input.value);
+  } catch {
+    document.execCommand("copy");
+  }
+  showToast("Link copied / คัดลอกลิงก์แล้ว / 已复制链接");
+});
 
 async function setStatus(id, status) {
   try {

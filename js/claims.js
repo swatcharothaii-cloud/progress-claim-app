@@ -4,6 +4,7 @@ import {
   collection,
   addDoc,
   doc,
+  getDoc,
   getDocs,
   updateDoc,
   onSnapshot,
@@ -56,6 +57,37 @@ export function watchAllClaims(cb, onErr) {
       if (onErr) onErr(err);
     }
   );
+}
+
+// สำหรับหน้าอนุมัติ (public, ไม่ต้องล็อกอิน) — subscribe รายการเดียวตาม document id
+export function watchClaim(id, cb, onErr) {
+  return onSnapshot(
+    doc(db, CLAIMS_COLLECTION, id),
+    (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    (err) => {
+      console.error(err);
+      if (onErr) onErr(err);
+    }
+  );
+}
+
+// ผู้บริหารกดอนุมัติ/ปฏิเสธผ่านลิงก์สาธารณะ — เก็บชื่อผู้อนุมัติแบบพิมพ์เอง (ไม่มีระบบล็อกอิน)
+export async function approveClaimPublic(id, approverName) {
+  await updateDoc(doc(db, CLAIMS_COLLECTION, id), {
+    status: CLAIM_STATUS.APPROVED,
+    approvedBy: (approverName || "").trim(),
+    approvalRespondedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function rejectClaimPublic(id, approverName) {
+  await updateDoc(doc(db, CLAIMS_COLLECTION, id), {
+    status: CLAIM_STATUS.REJECTED,
+    approvedBy: (approverName || "").trim(),
+    approvalRespondedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 // สำหรับหน้าตรวจสอบสถานะ (public) — subscribe เฉพาะโปรเจกต์ที่เลือก

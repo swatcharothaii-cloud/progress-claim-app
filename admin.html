@@ -154,6 +154,21 @@
   </div>
 </div>
 
+<!-- ============ APPROVAL LINK MODAL ============ -->
+<div class="modal-overlay" id="claim-link-modal" style="display:none;">
+  <div class="modal-sheet" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>🔗 Approval Link / ลิงก์อนุมัติ / 审批链接</h3>
+      <button class="icon-btn" id="close-claim-link-modal">✕</button>
+    </div>
+    <p class="hint">Copy this link and send it to management via LINE — they can approve/reject without logging in / คัดลอกลิงก์นี้ส่งให้ผู้บริหารทางไลน์ — กดอนุมัติ/ปฏิเสธได้เลยโดยไม่ต้องล็อกอิน / 复制此链接发送给管理层，无需登录即可批准/拒绝</p>
+    <div class="field">
+      <input type="text" id="claim-link-output" readonly style="font-size:13px;">
+    </div>
+    <button class="btn btn-primary btn-block" id="copy-claim-link-btn">📋 Copy link / คัดลอกลิงก์ / 复制链接</button>
+  </div>
+</div>
+
 <!-- ============ IMAGE LIGHTBOX ============ -->
 <div class="lightbox-overlay" id="lightbox-modal" style="display:none;">
   <button class="lightbox-close" id="lightbox-close">✕</button>
