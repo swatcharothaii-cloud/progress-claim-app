@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- พื้นหลังแคปซูลสีขาว ขอบดำ -->
+  <rect x="4" y="4" width="292" height="122" rx="61" ry="61" fill="#ffffff" stroke="#111111" stroke-width="5"/>
+
+  <!-- เส้นบาร์แนวนอนด้านบน/ล่าง (ลวดลายรางบานเลื่อนของประตู) -->
+  <rect x="26" y="30" width="248" height="12" fill="#111111"/>
+  <rect x="26" y="88" width="248" height="12" fill="#111111"/>
+
+  <!-- ตัวอักษร TRI -->
+  <text x="34" y="80" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="54" fill="#111111">TRI</text>
+
+  <!-- ไอคอนประตูแทนตัว O -->
+  <g transform="translate(163,35)">
+    <rect x="0" y="0" width="46" height="58" rx="4" fill="#ffffff" stroke="#8a3ea1" stroke-width="7"/>
+    <circle cx="34" cy="30" r="4.5" fill="#8a3ea1"/>
+  </g>
+
+  <!-- ตัวอักษร -C -->
+  <text x="218" y="80" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="54" fill="#111111">-C</text>
+</svg>

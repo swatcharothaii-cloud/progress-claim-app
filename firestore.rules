@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    //  Firestore ตัวนี้ใช้ร่วมกัน 2 แอป: repair-app (แจ้งซ่อม) และ progress-claim-app (เบิกงวดงาน)
+    //  หน้าแอดมินทั้งสองแอปไม่ใช้ระบบล็อกอิน/รหัสผ่าน — ระบุตัวตนด้วยการ "เลือกชื่อ" จากรายชื่อ
+    //  คงที่ (ดู ADMINS ใน js/config.js ของแต่ละแอป) เพื่อบันทึกว่าใครแก้ไขข้อมูล
+    //  ผลคือ: ใครก็ตามที่มีลิงก์ไปหน้าแอดมิน สามารถดู/แก้ไขรายการทั้งหมดได้โดยไม่ต้องพิสูจน์ตัวตนใดๆ
+    //  จึงควร "ไม่เผยแพร่ลิงก์หน้าแอดมินต่อสาธารณะ" ให้เฉพาะทีมงานเท่านั้น
+    // ============================================================
+
+    // ---------------- repair-app ----------------
+    match /repairRequests/{ticketId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.resource.data.keys().hasAll(
+                        ['siteName','reporterName','category','description','dateReported','dueDate','status']
+                      )
+                      && request.resource.data.status == 'รอแก้ไข';
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    match /admins/{uid} {
+      allow read, write: if false;
+    }
+
+    match /categories/{categoryId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.resource.data.keys().hasAll(['label', 'icon', 'color', 'active']);
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // ---------------- ใช้ร่วมกันทั้งสองแอป ----------------
+    // โปรเจกต์ — repair-app และ progress-claim-app อ้างอิง collection เดียวกันนี้ร่วมกัน
+    match /projects/{projectId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.resource.data.keys().hasAll(['label', 'color', 'active']);
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // ---------------- progress-claim-app ----------------
+    // รายการเบิกงวดงาน — แก้ไข/เพิ่ม/เปลี่ยนสถานะได้จากหน้าแอดมินเท่านั้น (ไม่มีฟอร์มสาธารณะ)
+    // หน้า track.html (สาธารณะ) อ่านได้อย่างเดียว ไม่มีสิทธิ์เขียน
+    match /progressClaims/{claimId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.resource.data.keys().hasAll(
+                        ['projectId','project','workItem','progressPercent','claimAmount','claimDate','status']
+                      );
+      allow update: if true;
+      // ปิดการลบไว้ก่อน กันลบข้อมูลโดยไม่ตั้งใจ (ใช้เปลี่ยนสถานะเป็น "ปฏิเสธ" แทนได้)
+      allow delete: if false;
+    }
+
+    // ---------------- repair-app: ระบบส่งงานให้ผู้รับเหมา (เฟส 1) ----------------
+    // รายชื่อผู้รับเหมา — จัดการได้จากหน้าแอดมินเท่านั้น (ไม่มีฟอร์มสาธารณะ)
+    match /contractors/{contractorId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.resource.data.keys().hasAll(['name', 'active']);
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // งานที่ส่งให้ผู้รับเหมา — แอดมินสร้างงาน, ผู้รับเหมาตอบรับ/ปฏิเสธ/เสนอราคาผ่านลิงก์สาธารณะ
+    // (contractor.html?job=...) โดยไม่ต้องล็อกอิน เช่นเดียวกับรูปแบบความปลอดภัยของทั้งระบบนี้
+    match /contractorJobs/{jobId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.resource.data.keys().hasAll(['type', 'contractorId', 'status']);
+      allow update: if true;
+      allow delete: if false;
+    }
+  }
+}

@@ -1,0 +1,54 @@
+// i18n.js — ข้อความ 3 ภาษา (ไทย/อังกฤษ/จีน) แบบเดียวกับ repair-app
+function tri(en, th, zh) {
+  return { en, th, zh, toString: () => th };
+}
+
+export const T = {
+  appTitleTrack: tri("Progress Claim Tracker", "ตรวจสอบสถานะเบิกงวดงาน", "工程款申请进度查询"),
+  appTitleAdmin: tri("Progress Claim Admin", "ระบบเบิกงวดงาน (แอดมิน)", "工程款申请管理"),
+  selectProjectLabel: tri("Select project", "เลือกโปรเจกต์", "选择项目"),
+  selectProjectPlaceholder: tri("-- Select a project --", "-- เลือกโปรเจกต์ --", "-- 请选择项目 --"),
+  noClaimsYet: tri("No progress claims for this project yet", "ยังไม่มีรายการเบิกงวดงานสำหรับโปรเจกต์นี้", "该项目暂无工程款申请记录"),
+  workItemLabel: tri("Work item / BOQ ref", "รายการงาน / อ้างอิง BOQ", "工程项目 / BOQ 参考"),
+  progressLabel: tri("Progress", "ความคืบหน้า", "进度"),
+  claimAmountLabel: tri("Claim amount", "จำนวนเงินที่เบิก", "申请金额"),
+  claimDateLabel: tri("Claim date", "วันที่เบิก", "申请日期"),
+  statusLabel: tri("Status", "สถานะ", "状态"),
+  notesLabel: tri("Notes", "หมายเหตุ", "备注"),
+  photosLabel: tri("Site photos", "รูปภาพหน้างาน", "现场照片"),
+  clickToViewPhoto: tri("Click to view full photo", "คลิกเพื่อดูรูปเต็มจอ", "点击查看完整照片"),
+  taxIdLabel: tri("Tax ID", "เลขประจำตัวผู้เสียภาษี", "税号"),
+  btnAddClaim: tri("+ Add progress claim", "+ เพิ่มรายการเบิกงวดงาน", "+ 新增工程款申请"),
+  btnSave: tri("Save", "บันทึก", "保存"),
+  btnCancel: tri("Cancel", "ยกเลิก", "取消"),
+  btnEdit: tri("Edit", "แก้ไข", "编辑"),
+  btnApprove: tri("Approve", "อนุมัติ", "批准"),
+  btnReject: tri("Reject", "ปฏิเสธ", "拒绝"),
+  btnExportExcel: tri("📊 Export Excel", "📊 ส่งออก Excel", "📊 导出 Excel"),
+  btnExportPdf: tri("📄 Export PDF", "📄 ส่งออก PDF", "📄 导出 PDF"),
+  totalClaimedLabel: tri("Total claimed", "ยอดเบิกรวม", "申请总额"),
+  totalApprovedLabel: tri("Total approved", "ยอดอนุมัติรวม", "已批准总额"),
+  totalPendingLabel: tri("Pending review", "รอตรวจสอบ", "待审核"),
+  allProjectsLabel: tri("All projects", "ทุกโปรเจกต์", "全部项目"),
+  allStatusLabel: tri("All statuses", "ทุกสถานะ", "全部状态"),
+  msgSaved: tri("Saved", "บันทึกแล้ว", "已保存"),
+  msgSavedFail: tri("Save failed, please try again", "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "保存失败，请重试"),
+  msgFillRequired: tri("Please fill in all required fields", "กรุณากรอกข้อมูลที่จำเป็นให้ครบ", "请填写所有必填项"),
+  msgConnectFailCheckInternet: tri("Connection failed, please check your internet", "เชื่อมต่อไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต", "连接失败，请检查网络"),
+  loginPromptName: tri("Please select your name to continue", "กรุณาเลือกชื่อของคุณเพื่อใช้งาน", "请选择您的姓名以继续"),
+  logoutBtn: tri("Switch user", "เปลี่ยนผู้ใช้งาน", "切换用户"),
+  pdfReportTitle: tri("Progress Claim Report", "รายงานเบิกงวดงาน", "工程款申请报告"),
+  pdfGeneratedAtPrefix: tri("Generated at", "สร้างรายงานเมื่อ", "生成时间"),
+  pdfPrintHint: tri("Use your browser's print dialog to save as PDF", "ใช้หน้าต่างพิมพ์ของเบราว์เซอร์เพื่อบันทึกเป็น PDF", "请使用浏览器打印对话框另存为 PDF"),
+};
+
+export function claimStatusTri(status) {
+  const map = {
+    "รอตรวจสอบ": tri("Pending review", "รอตรวจสอบ", "待审核"),
+    "อนุมัติแล้ว": tri("Approved", "อนุมัติแล้ว", "已批准"),
+    "ปฏิเสธ": tri("Rejected", "ปฏิเสธ", "已拒绝"),
+  };
+  const t = map[status];
+  if (!t) return status || "-";
+  return `${t.en} / ${t.th} / ${t.zh}`;
+}

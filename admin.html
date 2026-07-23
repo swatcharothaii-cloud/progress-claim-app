@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Progress Claim Admin / ระบบเบิกงวดงาน (แอดมิน) / 工程款申请管理</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+</head>
+<body>
+
+<div class="brand-bar brand-bar--admin" id="brand-bar"></div>
+
+<!-- ============ IDENTITY PICKER (ไม่ต้องล็อกอิน — เหมือน repair-app) ============ -->
+<div class="login-wrap" id="identity-screen">
+  <div class="login-card" style="max-width:420px;">
+    <h2 style="margin-top:0;">👋 Select Your Name / เลือกชื่อของคุณ / 请选择您的姓名</h2>
+    <p class="hint">Select your name before use. The system will record who edited each entry. / เลือกชื่อก่อนเข้าใช้งาน ระบบจะบันทึกไว้ว่าใครเป็นคนแก้ไขข้อมูลแต่ละรายการ / 使用前请先选择您的姓名，系统会记录每笔资料的编辑者</p>
+    <div class="admin-id-grid" id="admin-id-grid"></div>
+  </div>
+</div>
+
+<!-- ============ DASHBOARD ============ -->
+<div class="admin-shell" id="dashboard" style="display:none;">
+
+  <div class="admin-topbar">
+    <div>
+      <h2 style="margin:0;">🧾 Progress Claim Admin / ระบบเบิกงวดงาน / 工程款申请管理</h2>
+      <div class="hint" id="admin-whoami"></div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-outline btn-sm" id="switch-user-btn">Switch User / เปลี่ยนผู้ใช้งาน / 切换用户</button>
+    </div>
+  </div>
+
+  <div class="project-switch-bar">
+    <label for="project-switcher">📁 Project / โปรเจกต์ / 项目</label>
+    <select id="project-switcher">
+      <option value="">All Projects / ทุกโปรเจกต์ / 全部项目</option>
+    </select>
+    <a href="track.html" target="_blank" class="btn btn-outline btn-sm" style="margin-left:auto; white-space:nowrap;">🔎 Public Status Page / หน้าตรวจสอบสถานะ / 状态查询页面</a>
+  </div>
+
+  <div class="stat-grid" id="stat-grid"></div>
+
+  <details class="chart-card" id="project-manager">
+    <summary style="cursor:pointer; font-weight:600; font-size:15px;">📁 Manage Projects / จัดการโปรเจกต์ / 管理项目</summary>
+    <div style="margin-top:16px;">
+      <form id="project-add-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+          <label>Project Name (Thai) * / ชื่อโปรเจกต์ (ไทย) * / 项目名称（泰文）*</label>
+          <input type="text" id="proj-label" placeholder="e.g. Building A Renovation / เช่น โครงการปรับปรุงอาคาร A" required>
+        </div>
+        <div class="field" style="flex:0 0 80px; margin-bottom:0;">
+          <label>Color / สี / 颜色</label>
+          <input type="color" id="proj-color" value="#2563eb" style="padding:2px; height:38px; width:100%;">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
+      </form>
+      <div id="project-manage-list"></div>
+      <p class="hint" style="margin-top:12px;">รายชื่อโปรเจกต์ใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบ</p>
+    </div>
+  </details>
+
+  <div class="filter-bar">
+    <select id="filter-status">
+      <option value="">All Statuses / สถานะทั้งหมด / 全部状态</option>
+    </select>
+    <input type="text" id="filter-search" placeholder="Search work item / claim no... / ค้นหารายการงาน / เลขที่เบิก... / 搜索工程项目／单号…">
+    <button class="btn btn-primary btn-sm" id="add-claim-btn" style="white-space:nowrap;">+ Add Progress Claim / เพิ่มรายการเบิกงวดงาน / 新增申请</button>
+    <button class="btn btn-outline btn-sm" id="export-excel-btn" style="white-space:nowrap;">📊 Export Excel / ส่งออก Excel / 导出 Excel</button>
+    <button class="btn btn-outline btn-sm" id="export-pdf-btn" style="white-space:nowrap;">📄 Export PDF / ส่งออก PDF / 导出 PDF</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:64px;">Photo / รูป / 照片</th>
+          <th>Claim No. / เลขที่เบิก / 单号</th>
+          <th>Project / โปรเจกต์ / 项目</th>
+          <th>Work Item / รายการงาน / 工程项目</th>
+          <th>Progress / ความคืบหน้า / 进度</th>
+          <th>Amount / จำนวนเงิน / 金额</th>
+          <th>Date / วันที่ / 日期</th>
+          <th>Status / สถานะ / 状态</th>
+          <th style="width:150px;">Actions / จัดการ / 操作</th>
+        </tr>
+      </thead>
+      <tbody id="claims-tbody"></tbody>
+    </table>
+  </div>
+  <div id="empty-table-state"></div>
+</div>
+
+<!-- ============ ADD / EDIT MODAL ============ -->
+<div class="modal-overlay" id="claim-modal" style="display:none;">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h3 id="claim-modal-title">Add Progress Claim / เพิ่มรายการเบิกงวดงาน / 新增申请</h3>
+      <button class="icon-btn" id="close-claim-modal">✕</button>
+    </div>
+
+    <input type="hidden" id="c-id">
+    <div class="field"><label>Claim No. / เลขที่เบิก / 单号</label><input type="text" id="c-claimId" disabled></div>
+
+    <div class="field">
+      <label>Project * / โปรเจกต์ * / 项目 *</label>
+      <select id="c-project" required></select>
+    </div>
+
+    <div class="field">
+      <label>Work item / BOQ ref * / รายการงาน / อ้างอิง BOQ * / 工程项目 * </label>
+      <textarea id="c-workItem" rows="2" placeholder="e.g. งานทาสีภายใน ชั้น 1-2 / Interior painting floor 1-2" required></textarea>
+    </div>
+
+    <div style="display:flex; gap:12px;">
+      <div class="field" style="flex:1;">
+        <label>Progress (%) * / ความคืบหน้า (%) * / 进度 (%) *</label>
+        <input type="number" id="c-progress" min="0" max="100" step="1" required>
+      </div>
+      <div class="field" style="flex:1;">
+        <label>Claim amount (THB) * / จำนวนเงินที่เบิก (บาท) * / 申请金额 *</label>
+        <input type="number" id="c-amount" min="0" step="0.01" required>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:12px;">
+      <div class="field" style="flex:1;">
+        <label>Claim date * / วันที่เบิก * / 申请日期 *</label>
+        <input type="date" id="c-date" required>
+      </div>
+      <div class="field" style="flex:1;">
+        <label>Status / สถานะ / 状态</label>
+        <select id="c-status"></select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Notes / หมายเหตุ / 备注</label>
+      <textarea id="c-notes" rows="2"></textarea>
+    </div>
+
+    <div class="field">
+      <label>Site photos (1–5 images) / รูปภาพหน้างานประกอบการเบิก (1–5 ภาพ) / 现场照片 (1-5张)</label>
+      <input type="file" id="c-images" accept="image/*" multiple>
+      <div id="c-image-previews" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"></div>
+    </div>
+
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+      <button class="btn btn-outline" id="cancel-claim-btn">Cancel / ยกเลิก / 取消</button>
+      <button class="btn btn-primary" id="save-claim-btn">Save / บันทึก / 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ IMAGE LIGHTBOX ============ -->
+<div class="lightbox-overlay" id="lightbox-modal" style="display:none;">
+  <button class="lightbox-close" id="lightbox-close">✕</button>
+  <button class="lightbox-nav lightbox-prev" id="lightbox-prev">‹</button>
+  <img class="lightbox-img" id="lightbox-img" src="" alt="">
+  <button class="lightbox-nav lightbox-next" id="lightbox-next">›</button>
+  <div class="lightbox-counter" id="lightbox-counter"></div>
+</div>
+
+<div id="print-report"></div>
+
+<div id="toast-container"></div>
+
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>
