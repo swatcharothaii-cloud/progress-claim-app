@@ -9,7 +9,8 @@
       "firestore.rules"
     ],
     "rewrites": [
-      { "source": "/admin", "destination": "/admin.html" }
+      { "source": "/admin", "destination": "/admin.html" },
+      { "source": "/track", "destination": "/track.html" }
     ]
   },
   "firestore": {

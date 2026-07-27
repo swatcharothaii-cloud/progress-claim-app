@@ -1,6 +1,6 @@
 import { T } from "./i18n.js";
 
-// แสดงแถบโลโก้+ชื่อบริษัทที่หัวหน้า (ใช้ทั้ง index.html และ admin.html)
+// แสดงแถบโลโก้+ชื่อบริษัทที่หัว (ใช้ทั้ง index.html และ admin.html) — เหมือน repair-app
 export function renderCompanyBrandBar(containerId, company) {
   const el = document.getElementById(containerId);
   if (!el || !company) return;
@@ -13,7 +13,6 @@ export function renderCompanyBrandBar(containerId, company) {
   `;
 }
 
-// แสดงข้อมูลที่อยู่/เลขผู้เสียภาษีที่ท้ายหน้า (ใช้กับ index.html)
 export function renderCompanyFooter(containerId, company) {
   const el = document.getElementById(containerId);
   if (!el || !company) return;
@@ -52,36 +51,21 @@ export function formatDateThai(dateStr) {
   return d.toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" });
 }
 
-export function isOverdue(dueDate, status, doneStatusLabel) {
-  if (!dueDate || status === doneStatusLabel) return false;
-  const due = new Date(dueDate);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return due < today;
+export function formatMoney(n) {
+  const num = Number(n) || 0;
+  return num.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// เก็บ ticket id ที่ผู้ใช้เคยแจ้งไว้ใน localStorage ของอุปกรณ์นี้
-const MY_TICKETS_KEY = "myRepairTickets";
-
-export function saveMyTicket(id) {
-  const list = getMyTickets();
-  if (!list.includes(id)) {
-    list.unshift(id);
-    localStorage.setItem(MY_TICKETS_KEY, JSON.stringify(list.slice(0, 50)));
-  }
+export function escapeHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str == null ? "" : String(str);
+  return d.innerHTML;
 }
 
-export function getMyTickets() {
-  try {
-    return JSON.parse(localStorage.getItem(MY_TICKETS_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-export function generateTicketId() {
+// PC-YYYYMMDD-XXXX (รูปแบบเดียวกับ generateTicketId ของ repair-app)
+export function generateClaimId() {
   const d = new Date();
   const datePart = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `RP-${datePart}-${rand}`;
+  return `PC-${datePart}-${rand}`;
 }

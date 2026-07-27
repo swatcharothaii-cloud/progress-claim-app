@@ -1,7 +1,7 @@
-// ใช้ Firebase Modular SDK ผ่าน CDN (ไม่ต้องมี build step)
+// ใช้ Firebase Modular SDK ผ่าน CDN (ไม่ต้องมี build step) — ตัวเดียวกับ repair-app
 // หมายเหตุ: ไม่ใช้ Firebase Storage เพราะต้องอัปเกรดเป็นแผน Blaze (ผูกบัตรเครดิต)
 // รูปภาพที่แนบจะถูกบีบอัดแล้วเก็บเป็น base64 ตรงใน Firestore แทน (ดู image-compress.js)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
   collection,
@@ -14,20 +14,15 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 import { FIREBASE_CONFIG } from "./config.js";
 
-const app = initializeApp(FIREBASE_CONFIG);
+// getApps()/getApp() กันไว้เผื่อโหลดซ้ำ (ไม่ได้จำเป็นในแอปนี้ แต่ไม่มีผลเสีย)
+const app = getApps().length ? getApp() : initializeApp(FIREBASE_CONFIG);
 export const db = getFirestore(app);
-export const auth = getAuth(app);
 
 export {
   collection,
@@ -40,15 +35,9 @@ export {
   onSnapshot,
   query,
   orderBy,
+  where,
   serverTimestamp,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut,
 };
 
-export const REQUESTS_COLLECTION = "repairRequests";
-export const ADMINS_COLLECTION = "admins";
-export const CATEGORIES_COLLECTION = "categories";
+export const CLAIMS_COLLECTION = "progressClaims";
 export const PROJECTS_COLLECTION = "projects";
-export const CONTRACTORS_COLLECTION = "contractors";
-export const CONTRACTOR_JOBS_COLLECTION = "contractorJobs";

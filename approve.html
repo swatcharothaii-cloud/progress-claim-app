@@ -2,23 +2,24 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Approve Job / อนุมัติงาน / 批准工程</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Approve Progress Claim / อนุมัติรายการเบิกงวดงาน / 批准工程款申请</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
 <div class="app-shell">
 
   <div class="brand-bar" id="brand-bar"></div>
 
   <div class="app-header">
-    <h1>🧾 Approve Contractor Job / อนุมัติงานผู้รับเหมา / 批准承包商工程</h1>
-    <p>Review the job below and approve or reject it — no login required / ตรวจสอบรายละเอียดด้านล่างแล้วกดอนุมัติหรือปฏิเสธได้เลย ไม่ต้องล็อกอิน / 请查看以下工程详情并批准或拒绝，无需登录</p>
+    <h1>🧾 Approve Progress Claim / อนุมัติรายการเบิกงวดงาน / 批准工程款申请</h1>
+    <p>Review the claim below and approve or reject it — no login required / ตรวจสอบรายการด้านล่างแล้วกดอนุมัติหรือปฏิเสธได้เลย ไม่ต้องล็อกอิน / 请查看以下申请并批准或拒绝，无需登录</p>
   </div>
 
   <section class="tab-panel">
-    <div id="job-content" class="card">
-      <div class="hint">Loading… / กำลังโหลด... / 加载中…</div>
+    <div class="card" id="claim-content">
+      <div class="hint">Loading… / กำลังโหลด… / 加载中…</div>
     </div>
   </section>
 
@@ -33,6 +34,7 @@
   <div class="lightbox-counter" id="lightbox-counter"></div>
 </div>
 
+<div id="app-footer" class="app-footer"></div>
 <div id="toast-container"></div>
 
 <script type="module" src="js/approve-page.js"></script>
