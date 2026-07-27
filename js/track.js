@@ -1,128 +1,110 @@
-import { COMPANY } from "./config.js";
-import { renderCompanyBrandBar, renderCompanyFooter, formatDateThai, formatMoney, showToast, escapeHtml } from "./utils.js";
-import { T, claimStatusTri } from "./i18n.js";
-import { loadProjects } from "./projects.js";
-import { watchClaimsByProject } from "./claims.js";
+import { STATUS_STYLE, STATUS } from "./config.js";
+import { getMyTickets, formatDateThai, isOverdue, showToast } from "./utils.js";
+import { T, statusTri, deptTri, catTri, msgTicketNotFound } from "./i18n.js";
 
-renderCompanyBrandBar("brand-bar", COMPANY);
-renderCompanyFooter("app-footer", COMPANY);
+const ticketListEl = document.getElementById("ticket-list");
+const unsubscribers = new Map();
 
-const projectSelect = document.getElementById("project-select");
-const claimListEl = document.getElementById("claim-list");
-let unsub = null;
-let currentImages = [];
-let currentIndex = 0;
-
-async function init() {
-  try {
-    const projects = await loadProjects();
-    const active = projects.filter((p) => p.active !== false);
-    projectSelect.innerHTML =
-      `<option value="">-- Select a project -- / -- เลือกโปรเจกต์ -- / -- 请选择项目 --</option>` +
-      active.map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join("");
-  } catch (e) {
-    console.error(e);
-    showToast(T.msgConnectFailCheckInternet.th);
-  }
+// โหลด firebase-init.js แบบ dynamic import เมื่อจำเป็นต้องใช้จริงเท่านั้น
+let firebasePromise = null;
+function loadFirebase() {
+  if (!firebasePromise) firebasePromise = import("./firebase-init.js");
+  return firebasePromise;
 }
 
-projectSelect.addEventListener("change", () => {
-  if (unsub) {
-    unsub();
-    unsub = null;
+function renderTicketCard(id, data) {
+  let card = document.getElementById(`ticket-${id}`);
+  if (!card) {
+    card = document.createElement("div");
+    card.id = `ticket-${id}`;
+    card.className = "ticket-card";
+    ticketListEl.appendChild(card);
   }
-  const projectId = projectSelect.value;
-  claimListEl.innerHTML = "";
-  if (!projectId) return;
-  unsub = watchClaimsByProject(projectId, renderClaims, () => showToast(T.msgConnectFailCheckInternet.th));
-});
 
-function renderClaims(list) {
-  if (!list.length) {
-    claimListEl.innerHTML = `<div class="hint">${T.noClaimsYet.en} / ${T.noClaimsYet.th} / ${T.noClaimsYet.zh}</div>`;
+  if (!data) {
+    card.innerHTML = `<div class="meta">${msgTicketNotFound(id)}</div>`;
     return;
   }
-  claimListEl.innerHTML = list
-    .map((c) => {
-      const style = statusStyle(c.status);
-      const thumbs = (c.images || [])
-        .map(
-          (img, i) =>
-            `<img src="${img.url}" data-claim="${c.id}" data-idx="${i}" title="${T.clickToViewPhoto.th}">`
-        )
-        .join("");
-      return `
-      <div class="ticket-card" style="border-left-color:${style.dot};">
-        <div class="row">
-          <div>
-            <div class="site">${escapeHtml(c.workItem || "-")}</div>
-            <div class="meta">${T.claimAmountLabel.th}: ฿${formatMoney(c.claimAmount)} · ${T.progressLabel.th}: ${c.progressPercent ?? 0}%</div>
-          </div>
-          <span class="badge" style="background:${style.bg}; color:${style.text};">
-            <span class="dot" style="background:${style.dot};"></span>${claimStatusTri(c.status)}
-          </span>
-        </div>
-        <div class="meta" style="margin-top:8px;">${T.claimDateLabel.th}: ${formatDateThai(c.claimDate)} · #${escapeHtml(c.claimId || "")}</div>
-        ${c.notes ? `<div class="desc">${escapeHtml(c.notes)}</div>` : ""}
-        ${thumbs ? `<div class="meta" style="margin-top:8px;">${T.photosLabel.th}</div><div class="ticket-thumbs">${thumbs}</div>` : ""}
-      </div>`;
-    })
+
+  const style = STATUS_STYLE[data.status] || STATUS_STYLE[STATUS.PENDING];
+  const overdue = isOverdue(data.dueDate, data.status, STATUS.DONE);
+  const beforeImgsHtml = (data.images || [])
+    .map((img) => `<img src="${img.url}">`)
+    .join("");
+  const afterImgsHtml = (data.afterImages || [])
+    .map((img) => `<img src="${img.url}">`)
     .join("");
 
-  claimListEl.querySelectorAll(".ticket-thumbs img").forEach((img) => {
-    img.addEventListener("click", () => {
-      const claim = list.find((c) => c.id === img.dataset.claim);
-      const idx = Number(img.dataset.idx);
-      openLightbox(claim.images, idx);
-    });
-  });
+  card.style.borderLeftColor = style.dot;
+  card.innerHTML = `
+    <div class="row">
+      <div>
+        <div class="site">${escapeHtml(data.siteName || "-")}</div>
+        <div class="meta">${T.ticketNoPrefix}: ${data.ticketId} · ${escapeHtml(catTri(data.category) || "")}</div>
+        ${data.project ? `<div class="meta">${T.projectPrefix}: ${escapeHtml(data.project)}</div>` : ""}
+      </div>
+      <span class="badge" style="background:${style.bg}; color:${style.text};">
+        <span class="dot" style="background:${style.dot};"></span>${statusTri(data.status)}
+      </span>
+    </div>
+    <div class="desc">${escapeHtml(data.description || "")}</div>
+    <div class="meta" style="margin-top:8px;">
+      ${T.reportedOnPrefix} ${formatDateThai(data.dateReported)} · ${T.desiredCompletionPrefix}
+      <span class="${overdue ? "overdue" : ""}">${formatDateThai(data.dueDate)}${overdue ? " " + T.overdueSuffix : ""}</span>
+    </div>
+    ${data.status === STATUS.FORWARDED && data.forwardDept ? `<div class="meta">${T.forwardedToPrefix}: ${escapeHtml(deptTri(data.forwardDept))}</div>` : ""}
+    ${beforeImgsHtml ? `<div class="meta" style="margin-top:8px;">${T.beforePhotosLabel}</div><div class="ticket-thumbs">${beforeImgsHtml}</div>` : ""}
+    ${afterImgsHtml ? `<div class="meta" style="margin-top:8px;">${T.afterPhotosLabel}</div><div class="ticket-thumbs">${afterImgsHtml}</div>` : ""}
+  `;
 }
 
-function statusStyle(status) {
-  const map = {
-    "รอตรวจสอบ": { bg: "#fef3c7", text: "#92400e", dot: "#f59e0b" },
-    "อนุมัติแล้ว": { bg: "#d1fae5", text: "#065f46", dot: "#10b981" },
-    "ปฏิเสธ": { bg: "#fee2e2", text: "#991b1b", dot: "#ef4444" },
-  };
-  return map[status] || map["รอตรวจสอบ"];
+function escapeHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
 }
 
-// ============ Image Lightbox (เหมือน repair-app) ============
-const lightboxModal = document.getElementById("lightbox-modal");
-const lightboxImg = document.getElementById("lightbox-img");
-const lightboxCounter = document.getElementById("lightbox-counter");
+async function watchTicket(id) {
+  if (unsubscribers.has(id)) return;
+  unsubscribers.set(id, true); // reserve immediately to avoid duplicate concurrent calls
+  try {
+    const { db, doc, onSnapshot } = await loadFirebase();
+    const unsub = onSnapshot(
+      doc(db, "repairRequests", id),
+      (snap) => renderTicketCard(id, snap.exists() ? snap.data() : null),
+      (err) => console.error(err)
+    );
+    unsubscribers.set(id, unsub);
+  } catch (e) {
+    console.error(e);
+    showToast(T.msgConnectFailCheckInternet);
+    unsubscribers.delete(id);
+  }
+}
 
-function openLightbox(images, startIndex) {
-  currentImages = images || [];
-  currentIndex = startIndex || 0;
-  if (!currentImages.length) return;
-  renderLightbox();
-  lightboxModal.style.display = "flex";
+function loadMyTickets() {
+  const ids = getMyTickets();
+  if (ids.length === 0) {
+    ticketListEl.innerHTML = `<div class="empty-state"><span class="emoji">📭</span>${T.emptyOwnTickets}</div>`;
+    return;
+  }
+  ticketListEl.innerHTML = "";
+  ids.forEach(watchTicket);
 }
-function renderLightbox() {
-  lightboxImg.src = currentImages[currentIndex]?.url || "";
-  lightboxCounter.textContent = `${currentIndex + 1} / ${currentImages.length}`;
-}
-function closeLightbox() {
-  lightboxModal.style.display = "none";
-}
-document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
-document.getElementById("lightbox-prev").addEventListener("click", () => {
-  currentIndex = (currentIndex - 1 + currentImages.length) % currentImages.length;
-  renderLightbox();
-});
-document.getElementById("lightbox-next").addEventListener("click", () => {
-  currentIndex = (currentIndex + 1) % currentImages.length;
-  renderLightbox();
-});
-lightboxModal.addEventListener("click", (e) => {
-  if (e.target === lightboxModal) closeLightbox();
-});
-document.addEventListener("keydown", (e) => {
-  if (lightboxModal.style.display !== "flex") return;
-  if (e.key === "Escape") closeLightbox();
-  if (e.key === "ArrowLeft") document.getElementById("lightbox-prev").click();
-  if (e.key === "ArrowRight") document.getElementById("lightbox-next").click();
+
+document.getElementById("search-btn").addEventListener("click", () => {
+  const id = document.getElementById("search-ticket").value.trim().toUpperCase();
+  if (!id) {
+    showToast(T.msgSearchTicketRequired);
+    return;
+  }
+  ticketListEl.innerHTML = "";
+  watchTicket(id);
 });
 
-init();
+window.addEventListener("refresh-tickets", loadMyTickets);
+
+document.querySelector('[data-tab="track"]').addEventListener("click", loadMyTickets);
+
+// initial load if track tab happens to be active
+if (document.getElementById("tab-track").style.display !== "none") loadMyTickets();

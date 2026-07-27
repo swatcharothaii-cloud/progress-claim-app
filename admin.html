@@ -3,15 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Progress Claim Admin / ระบบเบิกงวดงาน (แอดมิน) / 工程款申请管理</title>
+<title>Admin System / ระบบแอดมิน / 管理系统 - Repair Report Online / แจ้งซ่อมออนไลน์ / 在线报修</title>
 <link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@line/liff@2.24.0/dist/liff.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
 <body>
 
 <div class="brand-bar brand-bar--admin" id="brand-bar"></div>
 
-<!-- ============ IDENTITY PICKER (ไม่ต้องล็อกอิน — เหมือน repair-app) ============ -->
+<!-- ============ IDENTITY PICKER (ไม่ต้องล็อกอิน) ============ -->
 <div class="login-wrap" id="identity-screen">
   <div class="login-card" style="max-width:420px;">
     <h2 style="margin-top:0;">👋 Select Your Name / เลือกชื่อของคุณ / 请选择您的姓名</h2>
@@ -25,7 +27,7 @@
 
   <div class="admin-topbar">
     <div>
-      <h2 style="margin:0;">🧾 Progress Claim Admin / ระบบเบิกงวดงาน / 工程款申请管理</h2>
+      <h2 style="margin:0;">🛠️ Admin Dashboard / แดชบอร์ดแอดมิน / 管理后台</h2>
       <div class="hint" id="admin-whoami"></div>
     </div>
     <div style="display:flex; gap:8px;">
@@ -33,15 +35,28 @@
     </div>
   </div>
 
+  <!-- ============ PROJECT SWITCHER — ขอบเขตข้อมูลทั้งหน้า (สถิติ/กราฟ/ตาราง/ตัวกรอง) จะแสดงเฉพาะ
+       โปรเจกต์ที่เลือกไว้เท่านั้น ไม่ปนกับโปรเจกต์อื่น เลือก "ทุกโปรเจกต์" เพื่อดูภาพรวมทั้งหมด ============ -->
   <div class="project-switch-bar">
     <label for="project-switcher">📁 Project / โปรเจกต์ / 项目</label>
     <select id="project-switcher">
       <option value="">All Projects / ทุกโปรเจกต์ / 全部项目</option>
     </select>
-    <a href="track.html" target="_blank" class="btn btn-outline btn-sm" style="margin-left:auto; white-space:nowrap;">🔎 Public Status Page / หน้าตรวจสอบสถานะ / 状态查询页面</a>
+  </div>
+
+  <div class="tabs" style="margin:0 0 18px; position:static;">
+    <button class="tab-btn active" data-period="day">Daily / รายวัน / 每日</button>
+    <button class="tab-btn" data-period="week">Weekly / รายสัปดาห์ / 每周</button>
+    <button class="tab-btn" data-period="month">Monthly / รายเดือน / 每月</button>
+    <button class="tab-btn" data-period="all">All / ทั้งหมด / 全部</button>
   </div>
 
   <div class="stat-grid" id="stat-grid"></div>
+
+  <div class="chart-card">
+    <h3 style="margin-top:0; font-size:15px;">Summary by Category / สรุปตามประเภทงาน / 按类别统计</h3>
+    <canvas id="category-chart" height="90"></canvas>
+  </div>
 
   <details class="chart-card" id="project-manager">
     <summary style="cursor:pointer; font-weight:600; font-size:15px;">📁 Manage Projects / จัดการโปรเจกต์ / 管理项目</summary>
@@ -58,7 +73,95 @@
         <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
       </form>
       <div id="project-manage-list"></div>
-      <p class="hint" style="margin-top:12px;">รายชื่อโปรเจกต์ใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบ</p>
+      <p class="hint" style="margin-top:12px;">
+        Note: The project name is saved in Thai as the actual stored value. Disabling a project hides it from the report form but keeps it visible in the dashboard/project switcher, so old data is unaffected. /
+        หมายเหตุ: ชื่อโปรเจกต์จะถูกบันทึกเป็นภาษาไทยตามที่กรอกจริง การปิดใช้งานจะซ่อนจากฟอร์มแจ้งซ่อมใหม่ แต่ยังเห็นในแดชบอร์ด/ตัวสลับโปรเจกต์เหมือนเดิม เพื่อไม่กระทบข้อมูลเก่า /
+        注意：项目名称将以泰文实际填写内容保存。停用某项目只会将其从新报修表单中隐藏，仍会显示在仪表板／项目切换器中，不影响旧数据
+      </p>
+    </div>
+  </details>
+
+  <details class="chart-card" id="category-manager">
+    <summary style="cursor:pointer; font-weight:600; font-size:15px;">🗂️ Manage Work Categories / จัดการประเภทงาน / 管理维修类别</summary>
+    <div style="margin-top:16px;">
+      <form id="category-add-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+        <div class="field" style="flex:0 0 64px; margin-bottom:0;">
+          <label>Icon / ไอคอน / 图标</label>
+          <input type="text" id="cat-icon" maxlength="4" placeholder="🔧" style="text-align:center;">
+        </div>
+        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+          <label>Category Name (Thai) * / ชื่อประเภทงาน (ไทย) * / 类别名称（泰文）*</label>
+          <input type="text" id="cat-label" placeholder="e.g. AC Cleaning / เช่น งานล้างแอร์" required>
+        </div>
+        <div class="field" style="flex:0 0 80px; margin-bottom:0;">
+          <label>Color / สี / 颜色</label>
+          <input type="color" id="cat-color" value="#2563eb" style="padding:2px; height:38px; width:100%;">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
+      </form>
+      <div id="category-manage-list"></div>
+      <p class="hint" style="margin-top:12px;">
+        Note: The category name is saved in Thai as the actual stored value. Disabling a category hides it from the report form but keeps it visible in reports/filters, so old data is unaffected. /
+        หมายเหตุ: ชื่อประเภทงานจะถูกบันทึกเป็นภาษาไทยตามที่กรอกจริง การปิดใช้งานจะซ่อนจากฟอร์มแจ้งซ่อมใหม่ แต่ยังเห็นในรายงาน/ตัวกรองเหมือนเดิม เพื่อไม่กระทบข้อมูลเก่า /
+        注意：类别名称将以泰文实际填写内容保存。停用某类别只会将其从新报修表单中隐藏，仍会显示在报表／筛选中，不影响旧数据
+      </p>
+    </div>
+  </details>
+
+  <details class="chart-card" id="contractor-manager">
+    <summary style="cursor:pointer; font-weight:600; font-size:15px;">👷 Manage Contractors / จัดการรายชื่อผู้รับเหมา / 管理承包商名单</summary>
+    <div style="margin-top:16px;">
+      <form id="contractor-add-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+        <div class="field" style="flex:1; min-width:160px; margin-bottom:0;">
+          <label>Contractor Name * / ชื่อผู้รับเหมา * / 承包商名称 *</label>
+          <input type="text" id="ctr-name" placeholder="e.g. ร้านช่างสมชาย" required>
+        </div>
+        <div class="field" style="flex:1; min-width:160px; margin-bottom:0;">
+          <label>LINE contact / ช่องทางไลน์ / LINE 联系方式</label>
+          <input type="text" id="ctr-line" placeholder="LINE ID / display name">
+        </div>
+        <div class="field" style="flex:0 0 140px; margin-bottom:0;">
+          <label>Phone / เบอร์โทร / 电话</label>
+          <input type="text" id="ctr-phone" placeholder="08x-xxx-xxxx">
+        </div>
+        <div class="field" style="flex:1 1 100%; margin-bottom:0;">
+          <label>Specialties / ประเภทงานที่ถนัด / 擅长工程类别</label>
+          <div id="ctr-categories" style="display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:6px;"></div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
+      </form>
+      <div id="contractor-manage-list"></div>
+      <p class="hint" style="margin-top:12px;">
+        Note: LINE contact is for your own reference only — this system does not send LINE messages automatically. Copy the job link and paste it into LINE chat yourself. /
+        หมายเหตุ: ช่องทางไลน์เป็นข้อมูลอ้างอิงสำหรับแอดมินเท่านั้น ระบบนี้ไม่ได้ส่งข้อความไลน์ให้อัตโนมัติ ต้องคัดลอกลิงก์งานไปวางในแชทไลน์ด้วยตัวเอง /
+        注意：LINE 联系方式仅供管理员参考，本系统不会自动发送 LINE 消息，请自行复制工程链接并粘贴到 LINE 聊天中
+      </p>
+    </div>
+  </details>
+
+  <details class="chart-card" id="contractor-jobs-panel" open>
+    <summary style="cursor:pointer; font-weight:600; font-size:15px;">🚚 Contractor Jobs / งานที่ส่งให้ผู้รับเหมา / 承包商工程</summary>
+    <div style="margin-top:16px;">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+        <button class="btn btn-primary btn-sm" id="add-contractor-job-btn">+ Send job to contractor / ส่งงานให้ผู้รับเหมา / 发送工程给承包商</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Job No. / เลขที่งาน / 单号</th>
+              <th>Type / ประเภท / 类型</th>
+              <th>Project / โปรเจกต์ / 项目</th>
+              <th>Contractor / ผู้รับเหมา / 承包商</th>
+              <th>Details / รายละเอียด / 详情</th>
+              <th>Status / สถานะ / 状态</th>
+              <th style="width:150px;">Links / ลิงก์ / 链接</th>
+            </tr>
+          </thead>
+          <tbody id="contractor-jobs-tbody"></tbody>
+        </table>
+      </div>
+      <div id="empty-contractor-jobs-state"></div>
     </div>
   </details>
 
@@ -66,10 +169,12 @@
     <select id="filter-status">
       <option value="">All Statuses / สถานะทั้งหมด / 全部状态</option>
     </select>
-    <input type="text" id="filter-search" placeholder="Search work item / claim no... / ค้นหารายการงาน / เลขที่เบิก... / 搜索工程项目／单号…">
-    <button class="btn btn-primary btn-sm" id="add-claim-btn" style="white-space:nowrap;">+ Add Progress Claim / เพิ่มรายการเบิกงวดงาน / 新增申请</button>
+    <select id="filter-category">
+      <option value="">All Categories / ประเภทงานทั้งหมด / 全部类别</option>
+    </select>
+    <input type="text" id="filter-search" placeholder="Search site / reporter / ticket no... / ค้นหาสถานที่ / ผู้แจ้ง / เลขที่... / 搜索地点／报修人／单号…">
     <button class="btn btn-outline btn-sm" id="export-excel-btn" style="white-space:nowrap;">📊 Export Excel / ส่งออก Excel / 导出 Excel</button>
-    <button class="btn btn-outline btn-sm" id="export-pdf-btn" style="white-space:nowrap;">📄 Export PDF / ส่งออก PDF / 导出 PDF</button>
+    <button class="btn btn-outline btn-sm" id="export-pdf-btn" style="white-space:nowrap;">📄 Export PDF / ส่งออกไลน์งาน PDF / 导出 PDF</button>
   </div>
 
   <div class="table-wrap">
@@ -77,99 +182,186 @@
       <thead>
         <tr>
           <th style="width:64px;">Photo / รูป / 照片</th>
-          <th>Claim No. / เลขที่เบิก / 单号</th>
+          <th>Ticket No. / เลขที่ / 单号</th>
           <th>Project / โปรเจกต์ / 项目</th>
-          <th>Work Item / รายการงาน / 工程项目</th>
-          <th>Progress / ความคืบหน้า / 进度</th>
-          <th>Amount / จำนวนเงิน / 金额</th>
-          <th>Date / วันที่ / 日期</th>
+          <th>Site / สถานที่ / 地点</th>
+          <th>Category / ประเภทงาน / 类别</th>
+          <th>Reporter / ผู้แจ้ง / 报修人</th>
+          <th>Date Reported / วันที่แจ้ง / 报修日期</th>
+          <th>Due Date / กำหนดเสร็จ / 截止日期</th>
           <th>Status / สถานะ / 状态</th>
-          <th style="width:150px;">Actions / จัดการ / 操作</th>
         </tr>
       </thead>
-      <tbody id="claims-tbody"></tbody>
+      <tbody id="requests-tbody"></tbody>
     </table>
   </div>
   <div id="empty-table-state"></div>
 </div>
 
-<!-- ============ ADD / EDIT MODAL ============ -->
-<div class="modal-overlay" id="claim-modal" style="display:none;">
+<!-- ============ DETAIL / EDIT MODAL ============ -->
+<div class="modal-overlay" id="detail-modal" style="display:none;">
   <div class="modal-sheet">
     <div class="modal-header">
-      <h3 id="claim-modal-title">Add Progress Claim / เพิ่มรายการเบิกงวดงาน / 新增申请</h3>
-      <button class="icon-btn" id="close-claim-modal">✕</button>
+      <h3>Repair Details / รายละเอียดงานซ่อม / 报修详情</h3>
+      <button class="icon-btn" id="close-detail-modal">✕</button>
     </div>
 
-    <input type="hidden" id="c-id">
-    <div class="field"><label>Claim No. / เลขที่เบิก / 单号</label><input type="text" id="c-claimId" disabled></div>
+    <div class="field"><label>Ticket No. / เลขที่แจ้งซ่อม / 报修单号</label><input type="text" id="d-ticketId" disabled></div>
+
+    <div class="field"><label>Site Name / ชื่อสถานที่ / 地点名称</label><input type="text" id="d-siteName"></div>
+
+    <div class="field">
+      <label>Location / ตำแหน่งที่ตั้ง / 位置</label>
+      <div class="hint" id="d-location-text">-</div>
+      <a href="#" id="d-map-link" target="_blank" class="hint" style="display:none;">Open in Google Maps ↗ / เปิดใน Google Maps ↗ / 在 Google 地图中打开 ↗</a>
+    </div>
+
+    <div class="field"><label>Reporter Name / ชื่อผู้แจ้ง / 报修人姓名</label><input type="text" id="d-reporterName"></div>
+
+    <div class="field">
+      <label>Project / โปรเจกต์ / 项目</label>
+      <select id="d-project"></select>
+    </div>
+
+    <div class="field">
+      <label>Category / ประเภทงาน / 维修类别</label>
+      <select id="d-category"></select>
+      <input type="text" id="d-categoryOther" style="margin-top:8px; display:none;" placeholder="Specify other category / ระบุประเภทงานอื่นๆ / 请注明其他类别">
+    </div>
+
+    <div class="field"><label>Problem Description / รายละเอียดปัญหา / 问题详情</label><textarea id="d-description"></textarea></div>
+
+    <div style="display:flex; gap:10px;">
+      <div class="field" style="flex:1;"><label>Date Reported / วันที่แจ้ง / 报修日期</label><input type="date" id="d-dateReported"></div>
+      <div class="field" style="flex:1;"><label>Desired Completion Date / วันที่ต้องการเสร็จ / 期望完成日期</label><input type="date" id="d-dueDate"></div>
+    </div>
+
+    <div class="field">
+      <label>Status / สถานะ / 状态</label>
+      <select id="d-status"></select>
+    </div>
+
+    <div class="field" id="d-forward-field" style="display:none;">
+      <label>Forward to Department / ส่งต่อให้แผนก / 转交部门</label>
+      <select id="d-forwardDept"></select>
+    </div>
+
+    <div class="field">
+      <label>📷 Before-Repair Photos / รูปภาพก่อนซ่อม (Before) / 维修前照片</label>
+      <div class="img-preview-grid" id="d-images"></div>
+    </div>
+
+    <div class="field">
+      <label>✅ After-Repair Photos / รูปภาพหลังซ่อม (After) / 维修后照片</label>
+      <div class="img-preview-grid" id="d-after-images"></div>
+      <div class="upload-box" id="d-after-upload-box">
+        <input type="file" id="d-after-image-input" accept="image/*" multiple style="display:none">
+        📷 Tap to add after-repair photo / แตะเพื่อเพิ่มรูปหลังซ่อม / 点击添加维修后照片
+      </div>
+      <div class="hint">Attach up to 5 photos, used to compare before/after / แนบได้สูงสุด 5 ภาพ ใช้เปรียบเทียบก่อน-หลังซ่อม / 最多可上传5张，用于对比维修前后</div>
+    </div>
+
+    <div class="hint" id="d-meta" style="margin-bottom:14px;"></div>
+
+    <button class="btn btn-outline btn-block" id="send-to-contractor-btn" style="margin-bottom:10px;">🚚 Send Job to Contractor / ส่งงานให้ผู้รับเหมา / 发送工程给承包商</button>
+
+    <button class="btn btn-primary" id="save-detail-btn">Save Changes / บันทึกการแก้ไข / 保存修改</button>
+    <button class="btn btn-outline btn-block" style="margin-top:10px;" id="cancel-detail-btn">Cancel / ยกเลิก / 取消</button>
+  </div>
+</div>
+
+<!-- ============ SEND JOB TO CONTRACTOR MODAL ============ -->
+<div class="modal-overlay" id="contractor-job-modal" style="display:none;">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h3>Send Job to Contractor / ส่งงานให้ผู้รับเหมา / 发送工程给承包商</h3>
+      <button class="icon-btn" id="close-contractor-job-modal">✕</button>
+    </div>
+
+    <div class="field">
+      <label>Job Type * / ประเภทงาน * / 工程类型 *</label>
+      <select id="cj-type">
+        <option value="fix">🔧 Fix / repair work / งานแก้ไข / 维修工程</option>
+        <option value="quote">💰 New work (quote needed) / งานใหม่ที่ต้องเสนอราคา / 新工程（需报价）</option>
+        <option value="defect">⚠️ Defect / failed inspection / งานแก้ไขที่ตรวจไม่ผ่าน / 检验不合格返修</option>
+      </select>
+    </div>
+
+    <div class="field" id="cj-defect-round-field" style="display:none;">
+      <label>Failed inspection round no. * / ไม่ผ่านการตรวจครั้งที่ * / 第几次检验不合格 *</label>
+      <input type="number" id="cj-defect-round" min="1" step="1" placeholder="e.g. 2">
+    </div>
 
     <div class="field">
       <label>Project * / โปรเจกต์ * / 项目 *</label>
-      <select id="c-project" required></select>
+      <select id="cj-project" required></select>
     </div>
 
     <div class="field">
-      <label>Work item / BOQ ref * / รายการงาน / อ้างอิง BOQ * / 工程项目 * </label>
-      <textarea id="c-workItem" rows="2" placeholder="e.g. งานทาสีภายใน ชั้น 1-2 / Interior painting floor 1-2" required></textarea>
-    </div>
-
-    <div style="display:flex; gap:12px;">
-      <div class="field" style="flex:1;">
-        <label>Progress (%) * / ความคืบหน้า (%) * / 进度 (%) *</label>
-        <input type="number" id="c-progress" min="0" max="100" step="1" required>
-      </div>
-      <div class="field" style="flex:1;">
-        <label>Claim amount (THB) * / จำนวนเงินที่เบิก (บาท) * / 申请金额 *</label>
-        <input type="number" id="c-amount" min="0" step="0.01" required>
-      </div>
-    </div>
-
-    <div style="display:flex; gap:12px;">
-      <div class="field" style="flex:1;">
-        <label>Claim date * / วันที่เบิก * / 申请日期 *</label>
-        <input type="date" id="c-date" required>
-      </div>
-      <div class="field" style="flex:1;">
-        <label>Status / สถานะ / 状态</label>
-        <select id="c-status"></select>
-      </div>
+      <label>Site Name / ชื่อสถานที่ / 地点名称</label>
+      <input type="text" id="cj-site" placeholder="e.g. Room 301, Building A">
     </div>
 
     <div class="field">
-      <label>Notes / หมายเหตุ / 备注</label>
-      <textarea id="c-notes" rows="2"></textarea>
+      <label>Job Description * / รายละเอียดงาน * / 工程详情 *</label>
+      <textarea id="cj-description" rows="3" required></textarea>
     </div>
 
     <div class="field">
-      <label>Site photos (1–5 images) / รูปภาพหน้างานประกอบการเบิก (1–5 ภาพ) / 现场照片 (1-5张)</label>
-      <input type="file" id="c-images" accept="image/*" multiple>
-      <div id="c-image-previews" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"></div>
+      <label>Contractor * / ผู้รับเหมา * / 承包商 *</label>
+      <select id="cj-contractor" required></select>
+    </div>
+
+    <div class="field" id="cj-visit-date-field">
+      <label>Proposed site visit date (optional) / วันที่เสนอเข้าหน้างาน (ไม่บังคับ) / 建议现场勘查日期（可选）</label>
+      <input type="date" id="cj-visit-date">
+      <p class="hint">The contractor can confirm or change this via their link. / ผู้รับเหมาสามารถยืนยันหรือแก้ไขวันที่ผ่านลิงก์ได้อีกครั้ง / 承包商可通过链接确认或更改</p>
+    </div>
+
+    <div class="field">
+      <label>Reference photos / รูปภาพประกอบ / 参考照片</label>
+      <input type="file" id="cj-images" accept="image/*" multiple>
+      <div id="cj-image-previews" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"></div>
     </div>
 
     <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
-      <button class="btn btn-outline" id="cancel-claim-btn">Cancel / ยกเลิก / 取消</button>
-      <button class="btn btn-primary" id="save-claim-btn">Save / บันทึก / 保存</button>
+      <button class="btn btn-outline" id="cancel-contractor-job-btn">Cancel / ยกเลิก / 取消</button>
+      <button class="btn btn-primary" id="save-contractor-job-btn">Create & Get Link / สร้างและรับลิงก์ / 创建并获取链接</button>
     </div>
   </div>
 </div>
 
-<!-- ============ APPROVAL LINK MODAL ============ -->
-<div class="modal-overlay" id="claim-link-modal" style="display:none;">
+<!-- ============ CONTRACTOR JOB LINK RESULT MODAL ============ -->
+<div class="modal-overlay" id="contractor-link-modal" style="display:none;">
+  <div class="modal-sheet" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>✅ Job Created / สร้างงานแล้ว / 工程已创建</h3>
+      <button class="icon-btn" id="close-contractor-link-modal">✕</button>
+    </div>
+    <p class="hint">Copy this link and paste it into LINE chat with the contractor / คัดลอกลิงก์นี้ไปวางในแชทไลน์กับผู้รับเหมา / 复制此链接并粘贴到与承包商的 LINE 聊天中</p>
+    <div class="field">
+      <input type="text" id="contractor-link-output" readonly style="font-size:13px;">
+    </div>
+    <button class="btn btn-primary btn-block" id="copy-contractor-link-btn">📋 Copy link / คัดลอกลิงก์ / 复制链接</button>
+  </div>
+</div>
+
+<!-- ============ APPROVAL LINK MODAL (ส่งให้ผู้บริหารอนุมัติ/ปฏิเสธ) ============ -->
+<div class="modal-overlay" id="job-approval-link-modal" style="display:none;">
   <div class="modal-sheet" style="max-width:480px;">
     <div class="modal-header">
       <h3>🔗 Approval Link / ลิงก์อนุมัติ / 审批链接</h3>
-      <button class="icon-btn" id="close-claim-link-modal">✕</button>
+      <button class="icon-btn" id="close-job-approval-link-modal">✕</button>
     </div>
     <p class="hint">Copy this link and send it to management via LINE — they can approve/reject without logging in / คัดลอกลิงก์นี้ส่งให้ผู้บริหารทางไลน์ — กดอนุมัติ/ปฏิเสธได้เลยโดยไม่ต้องล็อกอิน / 复制此链接发送给管理层，无需登录即可批准/拒绝</p>
     <div class="field">
-      <input type="text" id="claim-link-output" readonly style="font-size:13px;">
+      <input type="text" id="job-approval-link-output" readonly style="font-size:13px;">
     </div>
-    <button class="btn btn-primary btn-block" id="copy-claim-link-btn">📋 Copy link / คัดลอกลิงก์ / 复制链接</button>
+    <button class="btn btn-primary btn-block" id="copy-job-approval-link-btn">📋 Copy link / คัดลอกลิงก์ / 复制链接</button>
   </div>
 </div>
 
-<!-- ============ IMAGE LIGHTBOX ============ -->
+<!-- ============ IMAGE LIGHTBOX (ดูรูปเต็มจอ คลิกจากตารางหรือในหน้ารายละเอียด) ============ -->
 <div class="lightbox-overlay" id="lightbox-modal" style="display:none;">
   <button class="lightbox-close" id="lightbox-close">✕</button>
   <button class="lightbox-nav lightbox-prev" id="lightbox-prev">‹</button>
@@ -178,6 +370,7 @@
   <div class="lightbox-counter" id="lightbox-counter"></div>
 </div>
 
+<!-- ============ PRINT REPORT (ใช้ตอนกด "Export PDF" — ซ่อนอยู่บนหน้าจอปกติ แสดงเฉพาะตอนสั่งพิมพ์) ============ -->
 <div id="print-report"></div>
 
 <div id="toast-container"></div>

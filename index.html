@@ -2,11 +2,152 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="refresh" content="0; url=track.html">
-<title>Progress Claim App / ระบบเบิกงวดงาน / 工程款申请系统</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Repair Report Online / แจ้งซ่อมออนไลน์ / 在线报修</title>
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<p>Redirecting… / กำลังนำทาง... / 正在跳转… <a href="track.html">track.html</a></p>
+<div class="app-shell">
+
+  <div class="brand-bar" id="brand-bar"></div>
+
+  <div class="app-header">
+    <h1>🛠️ Repair Report / แจ้งซ่อมออนไลน์ / 在线报修</h1>
+    <p>Report issues and track status easily in one place / แจ้งปัญหา ติดตามสถานะ ได้ง่ายๆ ในที่เดียว / 轻松报修，一站式追踪进度</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="report">📝 Report / แจ้งซ่อม / 报修</button>
+    <button class="tab-btn" data-tab="track">🔍 Track Status / ติดตามสถานะ / 追踪进度</button>
+  </div>
+
+  <!-- ================= TAB: REPORT FORM ================= -->
+  <section id="tab-report" class="tab-panel">
+    <form id="report-form" class="card">
+
+      <div class="field">
+        <label>Project * / โปรเจกต์ * / 项目 *</label>
+        <select id="projectSelect" required>
+          <option value="">-- Select a project -- / -- เลือกโปรเจกต์ -- / -- 请选择项目 --</option>
+        </select>
+        <div class="hint" id="project-empty-hint" style="display:none; color:var(--danger);">
+          No projects available yet. Please contact an admin to add one first / ยังไม่มีโปรเจกต์ในระบบ กรุณาติดต่อแอดมินให้เพิ่มโปรเจกต์ก่อน / 系统中尚无项目，请先联系管理员添加项目
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Site Name * / ชื่อสถานที่ * / 地点名称 *</label>
+        <input type="text" id="siteName" placeholder="e.g. Room 301, Building A / เช่น ห้อง 301 อาคาร A / 例如：A栋301室" required>
+      </div>
+
+      <div class="field">
+        <label>Location / ตำแหน่งที่ตั้ง / 位置</label>
+        <div class="location-box" id="location-box">
+          <div class="loc-title">📍 <span id="loc-title-text">Tap to select location on map / แตะเพื่อระบุตำแหน่งบนแผนที่ / 点击在地图上选择位置</span></div>
+          <div class="loc-address" id="loc-address"></div>
+        </div>
+        <input type="hidden" id="loc-lat">
+        <input type="hidden" id="loc-lng">
+      </div>
+
+      <div class="field">
+        <label>Reporter Name * / ชื่อผู้แจ้ง * / 报修人姓名 *</label>
+        <input type="text" id="reporterName" placeholder="Full Name / ชื่อ-นามสกุล / 姓名" required>
+      </div>
+
+      <div class="field">
+        <label>Category * / ประเภทงาน * / 维修类别 *</label>
+        <div class="chip-grid" id="category-grid"></div>
+        <input type="text" id="categoryOther" style="display:none; margin-top:10px;" placeholder="Specify other category / ระบุประเภทงานอื่นๆ / 请注明其他类别">
+      </div>
+
+      <div class="field">
+        <label>Problem Description * / รายละเอียดปัญหาที่พบ * / 问题详情 *</label>
+        <textarea id="description" placeholder="Describe the issue / อธิบายอาการ/ปัญหาที่พบ / 请描述遇到的问题" required></textarea>
+      </div>
+
+      <div class="field">
+        <label>Date Reported * / วันที่แจ้ง * / 报修日期 *</label>
+        <input type="date" id="dateReported" required>
+      </div>
+
+      <div class="field">
+        <label>Desired Completion Date * / วันที่ต้องการให้แล้วเสร็จ * / 期望完成日期 *</label>
+        <input type="date" id="dueDate" required>
+      </div>
+
+      <div class="field">
+        <label>Attach Photos (1–5 images) / แนบรูปประกอบ (1–5 ภาพ) / 上传照片（1-5张）</label>
+        <div class="upload-box" id="upload-box">
+          <input type="file" id="imageInput" accept="image/*" multiple style="display:none">
+          📷 Tap to select photos / แตะเพื่อเลือกรูปภาพ / 点击选择照片
+        </div>
+        <div class="img-preview-grid" id="img-preview-grid"></div>
+        <div class="hint">Supports .jpg .png, max 5MB per image / รองรับไฟล์ .jpg .png ขนาดไม่เกิน 5MB ต่อรูป / 支持 .jpg .png 格式，每张不超过5MB</div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="submit-btn">Submit Report / ส่งแจ้งซ่อม / 提交报修</button>
+    </form>
+  </section>
+
+  <!-- ================= TAB: TRACK STATUS ================= -->
+  <section id="tab-track" class="tab-panel" style="display:none;">
+    <div class="card">
+      <div class="field" style="margin-bottom:10px;">
+        <label>Search by Ticket Number / ค้นหาด้วยเลขที่แจ้งซ่อม / 按报修单号查询</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="search-ticket" placeholder="Paste ticket number here / วางเลขที่แจ้งซ่อมที่นี่ / 在此粘贴报修单号">
+          <button class="btn btn-secondary btn-sm" id="search-btn" style="white-space:nowrap;">Search / ค้นหา / 查询</button>
+        </div>
+      </div>
+      <div class="hint">Or view your previously submitted reports on this device below / หรือดูรายการที่คุณเคยแจ้งจากอุปกรณ์นี้ด้านล่าง / 或查看此设备曾提交过的报修记录</div>
+    </div>
+    <div id="ticket-list" style="padding: 0 16px;"></div>
+  </section>
+
+  <div class="admin-entry-link">
+    <a href="admin.html">For Staff: Admin Login → / สำหรับเจ้าหน้าที่: เข้าสู่ระบบแอดมิน → / 员工入口：管理后台登录 →</a>
+  </div>
+
+  <div class="app-footer" id="app-footer"></div>
+
+</div>
+
+<!-- ================= MAP MODAL ================= -->
+<div class="modal-overlay" id="map-modal" style="display:none;">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h3>Select Location / ระบุตำแหน่ง / 选择位置</h3>
+      <button class="icon-btn" id="close-map-modal">✕</button>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <input type="text" id="map-search" placeholder="Search location... / ค้นหาสถานที่... / 搜索地点…">
+      <button class="btn btn-outline btn-sm" id="use-current-loc" style="white-space:nowrap;">📍 My Location / ตำแหน่งฉัน / 我的位置</button>
+    </div>
+    <div id="map-picker"></div>
+    <div class="hint" id="map-selected-address" style="margin-bottom:12px;"></div>
+    <button class="btn btn-primary" id="confirm-location">Confirm This Location / ยืนยันตำแหน่งนี้ / 确认此位置</button>
+  </div>
+</div>
+
+<!-- ================= SUCCESS MODAL ================= -->
+<div class="modal-overlay" id="success-modal" style="display:none;">
+  <div class="modal-sheet" style="text-align:center;">
+    <div style="font-size:52px;">✅</div>
+    <h3>Report Submitted Successfully! / แจ้งซ่อมสำเร็จ! / 报修提交成功！</h3>
+    <p style="color:#6b7280; font-size:14px;">Your ticket number is / เลขที่แจ้งซ่อมของคุณคือ / 您的报修单号是</p>
+    <div style="background:#eff6ff; color:#1d4ed8; font-weight:700; font-size:18px; padding:12px; border-radius:12px; margin:10px 0; letter-spacing:1px;" id="success-ticket-id"></div>
+    <div class="hint" style="margin-bottom:16px;">Please save this number to track status / กรุณาบันทึกเลขที่นี้ไว้เพื่อติดตามสถานะ / 请保存此单号以便查询进度</div>
+    <button class="btn btn-primary" id="goto-track-btn">Go to Track Status / ไปหน้าติดตามสถานะ / 前往查询进度</button>
+    <button class="btn btn-outline btn-block" style="margin-top:10px;" id="close-success-btn">Submit New Report / แจ้งซ่อมรายการใหม่ / 提交新的报修</button>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@line/liff@2.24.0/dist/liff.js"></script>
+<script type="module" src="js/report.js"></script>
+<script type="module" src="js/track.js"></script>
+<script type="module" src="js/tabs.js"></script>
 </body>
 </html>
