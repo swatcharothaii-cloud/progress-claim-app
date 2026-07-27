@@ -1,8 +1,12 @@
-import { ADMINS, COMPANY, CLAIM_STATUS, MAX_IMAGES, MAX_IMAGE_MB } from "./config.js";
+import {
+  ADMINS, COMPANY, CLAIM_STATUS, MAX_IMAGES, MAX_IMAGE_MB,
+  CONTRACTOR_JOB_TYPE, CONTRACTOR_JOB_TYPE_STYLE, CONTRACTOR_JOB_STATUS, CONTRACTOR_JOB_STATUS_STYLE,
+} from "./config.js";
 import { renderCompanyBrandBar, showToast, formatDateThai, formatMoney, escapeHtml, todayStr } from "./utils.js";
-import { T, claimStatusTri } from "./i18n.js";
+import { T, claimStatusTri, jobTypeTri, contractorJobStatusTri } from "./i18n.js";
 import { loadProjects, addProject, updateProject } from "./projects.js";
 import { addClaim, updateClaim, watchAllClaims, deleteClaim } from "./claims.js";
+import { watchAllContractorJobs, setPoNumber, passDeliveryInspection, failDeliveryInspection } from "./contractor-jobs.js";
 import { compressImageToDataUrl } from "./image-compress.js";
 
 renderCompanyBrandBar("brand-bar", COMPANY);
@@ -67,8 +71,10 @@ if (currentAdmin) {
 // ============================================================
 let allClaims = [];
 let allProjects = [];
+let allContractorJobs = [];
 let selectedProjectScope = localStorage.getItem("progressClaimProjectScope") || "";
 let unsubClaims = null;
+let unsubContractorJobs = null;
 let mainStarted = false;
 
 async function main() {
@@ -91,6 +97,15 @@ async function main() {
     (list) => {
       allClaims = list;
       render();
+    },
+    () => showToast(T.msgConnectFailCheckInternet.th)
+  );
+
+  // งานผู้รับเหมา (PO / ส่งมอบงาน / ตรวจรับ) — อ่านจาก Firestore เดียวกับ repair-app แบบเรียลไทม์
+  unsubContractorJobs = watchAllContractorJobs(
+    (list) => {
+      allContractorJobs = list;
+      renderContractorJobsTable();
     },
     () => showToast(T.msgConnectFailCheckInternet.th)
   );
@@ -182,6 +197,14 @@ function render() {
   const list = filteredClaims();
   renderStats(list);
   renderTable(list);
+  renderContractorJobsTable();
+}
+
+function filteredContractorJobs() {
+  return allContractorJobs.filter((j) => {
+    if (selectedProjectScope && j.projectId !== selectedProjectScope) return false;
+    return true;
+  });
 }
 
 function renderStats(list) {
@@ -262,6 +285,285 @@ function renderTable(list) {
     btn.addEventListener("click", () => deleteClaimRow(btn.dataset.id));
   });
 }
+
+// ============================================================
+//  CONTRACTOR JOBS (PO / DELIVERY / INSPECTION) — ข้อมูลจาก repair-app โดยตรง
+//  อ่าน+แก้ไข collection "contractorJobs" เดียวกัน ไม่มีการกรอกข้อมูลซ้ำ
+// ============================================================
+function renderContractorJobsTable() {
+  const tbody = document.getElementById("cj-tbody");
+  const emptyState = document.getElementById("empty-cj-state");
+  if (!tbody) return; // กันพลาดถ้า main() ยังไม่ได้เริ่ม/องค์ประกอบยังไม่พร้อม
+  const list = filteredContractorJobs();
+  if (!list.length) {
+    tbody.innerHTML = "";
+    emptyState.innerHTML = `<div class="hint" style="padding:16px; text-align:center;">${T.noContractorJobsYet.en} / ${T.noContractorJobsYet.th} / ${T.noContractorJobsYet.zh}</div>`;
+    return;
+  }
+  emptyState.innerHTML = "";
+  tbody.innerHTML = list
+    .map((j) => {
+      const style = CONTRACTOR_JOB_STATUS_STYLE[j.status] || CONTRACTOR_JOB_STATUS_STYLE[CONTRACTOR_JOB_STATUS.WAITING];
+      const typeStyle = CONTRACTOR_JOB_TYPE_STYLE[j.type] || CONTRACTOR_JOB_TYPE_STYLE[CONTRACTOR_JOB_TYPE.FIX];
+      const typeBadge = `<span class="cat-badge" style="background:${typeStyle.bg}; color:${typeStyle.text}; border:1px solid ${typeStyle.border}; font-weight:600;">${typeStyle.icon} ${jobTypeTri(j.type)}</span>${
+        j.type === CONTRACTOR_JOB_TYPE.DEFECT && j.defectRound
+          ? `<div class="hint" style="color:#991b1b; font-weight:700; margin-top:2px;">⚠️ ครั้งที่ ${escapeHtml(String(j.defectRound))}</div>`
+          : ""
+      }`;
+
+      let deliveryCell = `<span class="hint">-</span>`;
+      if (j.status === CONTRACTOR_JOB_STATUS.CONFIRMED || j.status === CONTRACTOR_JOB_STATUS.DONE) {
+        const poLine = j.poNumber
+          ? `<div class="hint" style="font-weight:600;">🧾 ${escapeHtml(j.poNumber)} <button class="btn btn-outline btn-sm cj-set-po-btn" data-id="${j.id}" style="padding:1px 6px; font-size:11px;">✏️</button></div>`
+          : `<button class="btn btn-outline btn-sm cj-set-po-btn" data-id="${j.id}">${T.btnSetPoNumber.en} / ${T.btnSetPoNumber.th}</button>`;
+        const photoCountBadge = (j.deliveryImages || []).length ? ` 🖼️${j.deliveryImages.length}` : "";
+        const roundBadge = j.inspectionRound
+          ? `<div class="hint" style="margin-top:2px;">🔍 ${T.inspectionRoundLabel.th} ${j.inspectionRound}${j.lastInspectionResult === "failed" ? " ❌" : ""}</div>`
+          : "";
+        let deliveryLine = `<div class="hint" style="margin-top:4px;">- ${T.msgAwaitingDelivery.th}</div>`;
+        if (j.deliveryAccepted) {
+          deliveryLine = `<div class="hint" style="margin-top:4px; color:#1e40af; font-weight:600;">✅ ${formatDateThai(j.deliveryDate)}${photoCountBadge}</div>${roundBadge}`;
+        } else if (j.deliverySubmitted) {
+          deliveryLine = `
+            <div class="hint" style="margin-top:4px; color:#92400e;">⏳ ${formatDateThai(j.deliveryDate)}${photoCountBadge}</div>${roundBadge}
+            <div style="display:flex; gap:4px; margin-top:4px;">
+              <button class="btn btn-sm cj-pass-delivery-btn" data-id="${j.id}" style="background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; padding:2px 6px; font-size:11px;">${T.btnInspectionPass.th}</button>
+              <button class="btn btn-sm cj-fail-delivery-btn" data-id="${j.id}" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; padding:2px 6px; font-size:11px;">${T.btnInspectionFail.th}</button>
+            </div>`;
+        } else if (j.inspectionRound > 0) {
+          deliveryLine = `<div class="hint" style="margin-top:4px; color:#991b1b;">❌ ${T.msgInspectionFailedResubmit.th}</div>${roundBadge}`;
+        }
+        deliveryCell = poLine + deliveryLine;
+      }
+
+      return `
+      <tr>
+        <td>${escapeHtml(j.jobId || "")}</td>
+        <td>${typeBadge}</td>
+        <td>${escapeHtml(j.project || "")}</td>
+        <td>${escapeHtml(j.contractorName || "")}</td>
+        <td><span class="cat-badge" style="background:${style.bg}; color:${style.text};"><span class="dot" style="background:${style.dot};"></span>${contractorJobStatusTri(j.status)}</span></td>
+        <td>${deliveryCell}</td>
+        <td><button class="btn btn-outline btn-sm cj-view-btn" data-id="${j.id}" title="${T.btnViewJob.th}">👁️</button></td>
+      </tr>`;
+    })
+    .join("");
+
+  tbody.querySelectorAll(".cj-set-po-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const j = allContractorJobs.find((x) => x.id === id);
+      if (!j) return;
+      const poNumber = prompt(`${T.promptSetPoNumber.en} / ${T.promptSetPoNumber.th}`, j.poNumber || "");
+      if (poNumber === null) return;
+      try {
+        await setPoNumber(id, poNumber);
+        showToast(T.msgSaved.th);
+      } catch (e) {
+        console.error(e);
+        showToast(T.msgSavedFail.th);
+      }
+    });
+  });
+  tbody.querySelectorAll(".cj-pass-delivery-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const j = allContractorJobs.find((x) => x.id === id);
+      if (!j) return;
+      const inspectorName = prompt(`${T.promptInspectorName.en} / ${T.promptInspectorName.th}`, currentAdmin?.name || "");
+      if (inspectorName === null) return;
+      if (!inspectorName.trim()) {
+        showToast(T.msgInspectorNameRequired.th);
+        return;
+      }
+      if (!confirm(`Confirm delivery passed for job "${j.jobId || id}"? / ยืนยันว่างาน "${j.jobId || id}" ตรวจผ่านแล้ว?`)) return;
+      try {
+        const round = (j.inspectionRound || 0) + 1;
+        await passDeliveryInspection(id, { round, inspectorName });
+        showToast(T.msgSaved.th);
+      } catch (e) {
+        console.error(e);
+        showToast(T.msgSavedFail.th);
+      }
+    });
+  });
+  tbody.querySelectorAll(".cj-fail-delivery-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const j = allContractorJobs.find((x) => x.id === id);
+      if (!j) return;
+      const inspectorName = prompt(`${T.promptInspectorName.en} / ${T.promptInspectorName.th}`, currentAdmin?.name || "");
+      if (inspectorName === null) return;
+      if (!inspectorName.trim()) {
+        showToast(T.msgInspectorNameRequired.th);
+        return;
+      }
+      const note = prompt(`${T.promptInspectionFailNote.en} / ${T.promptInspectionFailNote.th}`, "") || "";
+      if (!confirm(`Mark delivery as failed for job "${j.jobId || id}"? Contractor will need to resubmit. / ยืนยันว่างาน "${j.jobId || id}" ตรวจไม่ผ่าน? ผู้รับเหมาต้องส่งมอบงานใหม่`)) return;
+      try {
+        const round = (j.inspectionRound || 0) + 1;
+        await failDeliveryInspection(id, { round, inspectorName, note });
+        showToast(T.msgSaved.th);
+      } catch (e) {
+        console.error(e);
+        showToast(T.msgSavedFail.th);
+      }
+    });
+  });
+  tbody.querySelectorAll(".cj-view-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openContractorJobView(btn.dataset.id));
+  });
+}
+
+// ---------------- ใบส่งมอบงาน (dn-doc) — ใช้ร่วมกันทั้ง modal ดูบนหน้าจอ และตอนพิมพ์ ----------------
+function formatTs(ts) {
+  const dash = `<span class="dn-empty-note">-</span>`;
+  if (!ts) return dash;
+  const d = typeof ts.toDate === "function" ? ts.toDate() : ts.value ? ts.value : ts;
+  const out = formatDateThai(d);
+  return out && out !== "-" ? out : dash;
+}
+
+function buildDeliveryNoteHtml(j) {
+  const typeStyle = CONTRACTOR_JOB_TYPE_STYLE[j.type] || CONTRACTOR_JOB_TYPE_STYLE[CONTRACTOR_JOB_TYPE.FIX];
+  const statusStyle = CONTRACTOR_JOB_STATUS_STYLE[j.status] || CONTRACTOR_JOB_STATUS_STYLE[CONTRACTOR_JOB_STATUS.WAITING];
+  const dash = `<span class="dn-empty-note">-</span>`;
+  const val = (v) => (v === null || v === undefined || v === "" ? dash : escapeHtml(String(v)));
+
+  const repairDaysVal = j.repairDays ?? j.quoteDays;
+  const repairDaysDisplay = repairDaysVal != null ? `${escapeHtml(String(repairDaysVal))} วัน` : dash;
+
+  const priceValue =
+    j.type === CONTRACTOR_JOB_TYPE.QUOTE
+      ? `฿${Number(j.quotePrice || 0).toLocaleString("th-TH")}`
+      : j.type === CONTRACTOR_JOB_TYPE.FIX && j.repairPrice != null
+      ? `฿${Number(j.repairPrice || 0).toLocaleString("th-TH")}`
+      : dash;
+
+  const inspectionResultHtml =
+    j.lastInspectionResult === "passed"
+      ? `<b style="color:#065f46;">✅ Passed / ผ่าน</b>`
+      : j.lastInspectionResult === "failed"
+      ? `<b style="color:#991b1b;">❌ Failed / ไม่ผ่าน (ต้องแก้ไข)</b>`
+      : dash;
+
+  const row2 = (labelA, valueA, labelB, valueB) => `
+    <tr>
+      <td class="dn-label">${labelA}</td>
+      <td class="dn-value">${valueA}</td>
+      <td class="dn-label-2">${labelB}</td>
+      <td class="dn-value">${valueB}</td>
+    </tr>`;
+  const rowFull = (label, value) => `
+    <tr>
+      <td class="dn-label">${label}</td>
+      <td class="dn-value dn-full" colspan="3">${value}</td>
+    </tr>`;
+
+  const photosSection = (j.deliveryImages || []).length
+    ? `<div class="dn-section-title">📷 Delivery photos / ภาพส่งมอบงาน</div>
+       <div class="dn-photos-wrap">
+         <div class="dn-photos-grid">
+           ${(j.deliveryImages || []).map((img) => `<img class="print-thumb" src="${img.url}">`).join("")}
+         </div>
+       </div>`
+    : "";
+
+  return `
+    <div class="print-report-header">
+      ${COMPANY?.logo ? `<img src="${COMPANY.logo}">` : ""}
+      <div class="titles">
+        <h1>${escapeHtml(COMPANY?.nameTh || "")}</h1>
+        <div class="sub">${escapeHtml(COMPANY?.nameEn || "")}</div>
+      </div>
+    </div>
+
+    <div class="dn-doc">
+      <div class="dn-doc-title-bar">
+        <div class="dn-doc-title">
+          ${T.deliveryNoteTitle.en} / ${T.deliveryNoteTitle.th}
+          <span class="sub">${typeStyle.icon} ${jobTypeTri(j.type)}${j.type === CONTRACTOR_JOB_TYPE.DEFECT && j.defectRound ? ` (ครั้งที่ ${escapeHtml(String(j.defectRound))})` : ""}</span>
+        </div>
+        <div class="dn-doc-no">
+          Job No. / เลขที่งาน
+          <b>${escapeHtml(j.jobId || "-")}</b>
+          <span class="dn-status-badge" style="background:${statusStyle.bg}; color:${statusStyle.text};">${contractorJobStatusTri(j.status)}</span>
+        </div>
+      </div>
+
+      <div class="dn-section-title">🗂️ Job Information / ข้อมูลงาน</div>
+      <table class="dn-table">
+        ${row2("PO Number<br>เลขที่ PO", `<b>${val(j.poNumber)}</b>`, "Project<br>โปรเจกต์", val(j.project))}
+        ${row2("Site<br>สถานที่", val(j.siteName), "Contractor<br>ผู้รับเหมา", val(j.contractorName))}
+        ${rowFull("Description<br>รายละเอียดงาน", val(j.description))}
+      </table>
+
+      <div class="dn-section-title">📅 Schedule &amp; Price / กำหนดการและราคา</div>
+      <table class="dn-table">
+        ${row2("Site visit date<br>วันเข้าหน้างาน", j.siteVisitDate ? formatDateThai(j.siteVisitDate) : dash, "Repair days<br>จำนวนวันซ่อม", repairDaysDisplay)}
+        ${rowFull("Price<br>ราคา", `<b>${priceValue}</b>`)}
+      </table>
+
+      <div class="dn-section-title">📦 Delivery / การส่งมอบงาน</div>
+      <table class="dn-table">
+        ${row2("Delivery date<br>วันส่งมอบงาน", j.deliveryDate ? formatDateThai(j.deliveryDate) : dash, "Supervisor<br>ผู้ดูแลงาน", val(j.supervisorName))}
+        ${rowFull("Delivery note<br>หมายเหตุส่งมอบ", val(j.deliveryNote))}
+      </table>
+
+      <div class="dn-section-title">🔍 Inspection &amp; Acceptance / การตรวจรับงาน</div>
+      <table class="dn-table">
+        ${row2("Inspection round<br>ตรวจงานครั้งที่", val(j.inspectionRound), "Inspection result<br>ผลตรวจล่าสุด", inspectionResultHtml)}
+        ${row2("Inspector<br>ผู้ตรวจงาน", val(j.lastInspectionBy), "Inspected date<br>วันที่ตรวจ", formatTs(j.lastInspectionAt))}
+        ${j.lastInspectionNote ? rowFull("Inspection note<br>หมายเหตุการตรวจ", val(j.lastInspectionNote)) : ""}
+      </table>
+
+      ${photosSection}
+
+      <div class="dn-sign-grid">
+        <div class="dn-sign-block">
+          <div class="dn-sign-line">${j.supervisorName ? escapeHtml(j.supervisorName) : "&nbsp;"}</div>
+          <div class="dn-sign-role">ผู้ส่งมอบงาน / Delivered by</div>
+        </div>
+        <div class="dn-sign-block">
+          <div class="dn-sign-line">${j.lastInspectionBy ? escapeHtml(j.lastInspectionBy) : "&nbsp;"}</div>
+          <div class="dn-sign-role">ผู้ตรวจรับงาน / Inspected by</div>
+        </div>
+        <div class="dn-sign-block">
+          <div class="dn-sign-line">&nbsp;</div>
+          <div class="dn-sign-role">ผู้อนุมัติ / Approved by</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+let cjViewingId = null;
+function openContractorJobView(id) {
+  const j = allContractorJobs.find((x) => x.id === id);
+  if (!j) return;
+  cjViewingId = id;
+  document.getElementById("cj-view-title").textContent = `${T.deliveryNoteTitle.en} / ${T.deliveryNoteTitle.th} — ${j.jobId || ""}`;
+  document.getElementById("cj-view-body").innerHTML = buildDeliveryNoteHtml(j);
+  document.getElementById("cj-view-modal").style.display = "flex";
+  document.querySelectorAll("#cj-view-body .print-thumb").forEach((img, idx) => {
+    img.style.cursor = "zoom-in";
+    img.addEventListener("click", () => openLightbox(j.deliveryImages, idx));
+  });
+}
+function closeContractorJobView() {
+  document.getElementById("cj-view-modal").style.display = "none";
+  cjViewingId = null;
+}
+document.getElementById("close-cj-view-modal").addEventListener("click", closeContractorJobView);
+document.getElementById("cj-view-close-btn").addEventListener("click", closeContractorJobView);
+document.getElementById("cj-view-print-btn").addEventListener("click", () => {
+  if (!cjViewingId) return;
+  const j = allContractorJobs.find((x) => x.id === cjViewingId);
+  if (!j) return;
+  document.getElementById("print-report").innerHTML = buildDeliveryNoteHtml(j);
+  showToast(T.pdfPrintHint.th);
+  setTimeout(() => window.print(), 300);
+});
 
 // ลบรายการเบิกงวดงานถาวร (ตามคำขอ) — เตือนก่อนกดลบจริงเสมอ กู้คืนไม่ได้หลังลบแล้ว
 async function deleteClaimRow(id) {

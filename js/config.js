@@ -59,3 +59,36 @@ export const IMAGE_MAX_DIMENSION = 1000;
 export const IMAGE_TARGET_BASE64_BYTES = 140 * 1024;
 export const MAX_IMAGES = 5;
 export const MAX_IMAGE_MB = 5;
+
+// ============================================================
+//  6) งานที่ส่งให้ผู้รับเหมา (Contractor Jobs) — ใช้ Firestore collection "contractorJobs"
+//  ร่วมกับ repair-app ตัวเดียวกัน (ดูค่าคงที่ตัวเดียวกันนี้ใน repair-app/js/config.js — ต้องแก้ไข
+//  พร้อมกันทั้ง 2 ที่ถ้ามีการเปลี่ยนค่า/สี/ป้ายชื่อ เพื่อไม่ให้ 2 ระบบแสดงผลไม่ตรงกัน)
+//  หน้าแอดมินของ progress-claim-app ใช้ค่านี้แค่แสดงผล + กดกำหนดเลขที่ PO + ตรวจรับงาน (ผ่าน/ไม่ผ่าน)
+//  ส่วนการ "สร้างงาน" และ "ตอบรับงานของผู้รับเหมา" ยังคงทำที่ repair-app เท่านั้น
+// ============================================================
+export const CONTRACTOR_JOB_TYPE = {
+  FIX: "fix",
+  QUOTE: "quote",
+  DEFECT: "defect",
+};
+
+export const CONTRACTOR_JOB_TYPE_STYLE = {
+  [CONTRACTOR_JOB_TYPE.FIX]: { bg: "#dbeafe", text: "#1e40af", border: "#93c5fd", icon: "🔧" },
+  [CONTRACTOR_JOB_TYPE.QUOTE]: { bg: "#d1fae5", text: "#065f46", border: "#6ee7b7", icon: "💰" },
+  [CONTRACTOR_JOB_TYPE.DEFECT]: { bg: "#fee2e2", text: "#991b1b", border: "#fca5a5", icon: "⚠️" },
+};
+
+export const CONTRACTOR_JOB_STATUS = {
+  WAITING: "รอผู้รับเหมาตอบรับ",
+  CONFIRMED: "ผู้รับเหมารับงานแล้ว",
+  REJECTED: "ผู้รับเหมาปฏิเสธ",
+  DONE: "เสร็จสิ้น",
+};
+
+export const CONTRACTOR_JOB_STATUS_STYLE = {
+  [CONTRACTOR_JOB_STATUS.WAITING]: { bg: "#fef3c7", text: "#92400e", dot: "#f59e0b" },
+  [CONTRACTOR_JOB_STATUS.CONFIRMED]: { bg: "#d1fae5", text: "#065f46", dot: "#10b981" },
+  [CONTRACTOR_JOB_STATUS.REJECTED]: { bg: "#fee2e2", text: "#991b1b", dot: "#ef4444" },
+  [CONTRACTOR_JOB_STATUS.DONE]: { bg: "#dbeafe", text: "#1e40af", dot: "#3b82f6" },
+};

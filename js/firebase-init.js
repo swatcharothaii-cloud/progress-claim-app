@@ -43,3 +43,5 @@ export {
 
 export const CLAIMS_COLLECTION = "progressClaims";
 export const PROJECTS_COLLECTION = "projects";
+// collection เดียวกับ repair-app (Firestore ตัวเดียวกัน) — ใช้อ่าน/แก้ไข PO และการตรวจรับงานจากที่นี่ได้เลย
+export const CONTRACTOR_JOBS_COLLECTION = "contractorJobs";
