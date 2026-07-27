@@ -19,7 +19,8 @@ service cloud.firestore {
                       )
                       && request.resource.data.status == 'รอแก้ไข';
       allow update: if true;
-      allow delete: if false;
+      // เปิดให้ลบถาวรได้จากหน้าแอดมิน (ตามคำขอ) — กดลบแล้วกู้คืนไม่ได้
+      allow delete: if true;
     }
 
     match /admins/{uid} {
@@ -54,8 +55,8 @@ service cloud.firestore {
                         ['projectId','project','workItem','progressPercent','claimAmount','claimDate','status']
                       );
       allow update: if true;
-      // ปิดการลบไว้ก่อน กันลบข้อมูลโดยไม่ตั้งใจ (ใช้เปลี่ยนสถานะเป็น "ปฏิเสธ" แทนได้)
-      allow delete: if false;
+      // เปิดให้ลบถาวรได้จากหน้าแอดมิน (ตามคำขอ) — กดลบแล้วกู้คืนไม่ได้
+      allow delete: if true;
     }
 
     // ---------------- repair-app: ระบบส่งงานให้ผู้รับเหมา (เฟส 1) ----------------
@@ -65,7 +66,8 @@ service cloud.firestore {
       allow list: if true;
       allow create: if request.resource.data.keys().hasAll(['name', 'active']);
       allow update: if true;
-      allow delete: if false;
+      // เปิดให้ลบถาวรได้จากหน้าแอดมิน (ตามคำขอ) — กดลบแล้วกู้คืนไม่ได้ (งานเก่าที่อ้างอิงชื่อผู้รับเหมารายนี้จะยังแสดงชื่อเดิมไว้ได้ปกติ)
+      allow delete: if true;
     }
 
     // งานที่ส่งให้ผู้รับเหมา — แอดมินสร้างงาน, ผู้รับเหมาตอบรับ/ปฏิเสธ/เสนอราคาผ่านลิงก์สาธารณะ
@@ -75,7 +77,8 @@ service cloud.firestore {
       allow list: if true;
       allow create: if request.resource.data.keys().hasAll(['type', 'contractorId', 'status']);
       allow update: if true;
-      allow delete: if false;
+      // เปิดให้ลบถาวรได้จากหน้าแอดมิน (ตามคำขอ) — กดลบแล้วกู้คืนไม่ได้
+      allow delete: if true;
     }
   }
 }

@@ -2,7 +2,7 @@ import { ADMINS, COMPANY, CLAIM_STATUS, MAX_IMAGES, MAX_IMAGE_MB } from "./confi
 import { renderCompanyBrandBar, showToast, formatDateThai, formatMoney, escapeHtml, todayStr } from "./utils.js";
 import { T, claimStatusTri } from "./i18n.js";
 import { loadProjects, addProject, updateProject } from "./projects.js";
-import { addClaim, updateClaim, watchAllClaims } from "./claims.js";
+import { addClaim, updateClaim, watchAllClaims, deleteClaim } from "./claims.js";
 import { compressImageToDataUrl } from "./image-compress.js";
 
 renderCompanyBrandBar("brand-bar", COMPANY);
@@ -234,6 +234,7 @@ function renderTable(list) {
           ${c.status !== CLAIM_STATUS.APPROVED ? `<button class="btn btn-outline btn-sm approve-btn" data-id="${c.id}" title="${T.btnApprove.th}">✅</button>` : ""}
           ${c.status !== CLAIM_STATUS.REJECTED ? `<button class="btn btn-outline btn-sm reject-btn" data-id="${c.id}" title="${T.btnReject.th}">❌</button>` : ""}
           <button class="btn btn-outline btn-sm send-approval-link-btn" data-id="${c.id}" title="Send approval link to management / ส่งลิงก์อนุมัติให้ผู้บริหาร / 发送审批链接给管理层">🔗</button>
+          <button class="btn btn-sm delete-claim-btn" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5;" data-id="${c.id}" title="Delete permanently / ลบถาวร / 永久删除">🗑️</button>
         </td>
       </tr>`;
     })
@@ -257,6 +258,25 @@ function renderTable(list) {
   tbody.querySelectorAll(".send-approval-link-btn").forEach((btn) => {
     btn.addEventListener("click", () => showApprovalLink(btn.dataset.id));
   });
+  tbody.querySelectorAll(".delete-claim-btn").forEach((btn) => {
+    btn.addEventListener("click", () => deleteClaimRow(btn.dataset.id));
+  });
+}
+
+// ลบรายการเบิกงวดงานถาวร (ตามคำขอ) — เตือนก่อนกดลบจริงเสมอ กู้คืนไม่ได้หลังลบแล้ว
+async function deleteClaimRow(id) {
+  const c = allClaims.find((x) => x.id === id);
+  if (!c) return;
+  if (!confirm(`Delete claim "${c.claimId || id}" permanently? This cannot be undone.\nลบรายการเบิกงวดงาน "${c.claimId || id}" ถาวร? กู้คืนไม่ได้`)) {
+    return;
+  }
+  try {
+    await deleteClaim(id);
+    showToast(T.msgSaved.th);
+  } catch (e) {
+    console.error(e);
+    showToast(T.msgSavedFail.th);
+  }
 }
 
 // ---------------- ลิงก์อนุมัติสำหรับผู้บริหาร (ไม่ต้องล็อกอิน) ----------------

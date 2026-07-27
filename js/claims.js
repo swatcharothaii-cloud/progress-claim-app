@@ -7,6 +7,7 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   query,
   where,
@@ -44,6 +45,11 @@ export async function updateClaim(id, patch, updatedBy) {
     updatedAt: serverTimestamp(),
     updatedBy: updatedBy || "",
   });
+}
+
+// ลบรายการเบิกงวดงานถาวร (ตามคำขอ) — กู้คืนไม่ได้
+export async function deleteClaim(id) {
+  await deleteDoc(doc(db, CLAIMS_COLLECTION, id));
 }
 
 // สำหรับหน้าแอดมิน — subscribe รายการทั้งหมด (เรียงใหม่สุดก่อน)
