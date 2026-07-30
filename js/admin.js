@@ -445,6 +445,18 @@ function formatTs(ts) {
   return out && out !== "-" ? out : dash;
 }
 
+// ตั้งค่าขนาด/แนวกระดาษสำหรับการพิมพ์แบบไดนามิก — ต้องกำหนดใหม่ทุกครั้งก่อนสั่งพิมพ์ เพราะ #print-report
+// ใช้ซ้ำทั้งกับ "ใบส่งมอบงาน" (เอกสารเดี่ยว เหมาะกับแนวตั้ง A4) และ "รายงานตาราง" (หลายคอลัมน์ เหมาะกับแนวนอน A4)
+function setPrintPage(orientation, marginMm = 10) {
+  let styleEl = document.getElementById("dynamic-print-page-style");
+  if (!styleEl) {
+    styleEl = document.createElement("style");
+    styleEl.id = "dynamic-print-page-style";
+    document.head.appendChild(styleEl);
+  }
+  styleEl.textContent = `@media print { @page { size: A4 ${orientation}; margin: ${marginMm}mm; } }`;
+}
+
 function buildDeliveryNoteHtml(j) {
   const typeStyle = CONTRACTOR_JOB_TYPE_STYLE[j.type] || CONTRACTOR_JOB_TYPE_STYLE[CONTRACTOR_JOB_TYPE.FIX];
   const statusStyle = CONTRACTOR_JOB_STATUS_STYLE[j.status] || CONTRACTOR_JOB_STATUS_STYLE[CONTRACTOR_JOB_STATUS.WAITING];
@@ -582,6 +594,7 @@ document.getElementById("cj-view-print-btn").addEventListener("click", () => {
   const j = allContractorJobs.find((x) => x.id === cjViewingId);
   if (!j) return;
   document.getElementById("print-report").innerHTML = buildDeliveryNoteHtml(j);
+  setPrintPage("portrait", 10); // ใบส่งมอบงาน = เอกสารเดี่ยว พิมพ์แนวตั้ง A4
   showToast(T.pdfPrintHint.th);
   setTimeout(() => window.print(), 300);
 });
@@ -1026,6 +1039,7 @@ function exportPdf() {
       <tbody>${rowsHtml}</tbody>
     </table>
   `;
+  setPrintPage("landscape", 8); // รายงานตารางหลายคอลัมน์ = พิมพ์แนวนอน A4
   showToast(T.pdfPrintHint.th);
   setTimeout(() => window.print(), 300);
 }
