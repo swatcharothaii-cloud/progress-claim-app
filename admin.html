@@ -84,6 +84,33 @@
     <div id="empty-cj-state"></div>
   </details>
 
+  <details class="chart-card" id="legacy-po-section">
+    <summary style="cursor:pointer; font-weight:600; font-size:15px;">📜 Purchase Order Archive (PEAK Import) / คลังใบสั่งซื้อเก่าจาก PEAK / PEAK采购单存档</summary>
+    <p class="hint" style="margin-top:10px;">ใบสั่งซื้อเก่าที่เคยออกผ่านโปรแกรมบัญชี PEAK ก่อนจะมีระบบนี้ — นำเข้าครั้งเดียว แยกตามโปรเจกต์ให้อัตโนมัติ กรองตามโปรเจกต์ที่เลือกไว้ด้านบนได้เหมือนกับส่วนอื่นๆ / Legacy PO documents issued via PEAK before this system existed — import once, auto-grouped by project.</p>
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:12px 0;">
+      <button class="btn btn-primary btn-sm" id="import-legacy-po-btn">📥 Import from PEAK / นำเข้าจาก PEAK / 从PEAK导入</button>
+      <span class="hint" id="legacy-po-import-status"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>PO No. / เลขที่เอกสาร / 单号</th>
+            <th>Date / วันที่ / 日期</th>
+            <th>Project / โปรเจกต์ / 项目</th>
+            <th>Contractor / ช่างประจำ / 承包商</th>
+            <th>Vendor / ผู้ขาย / 供应商</th>
+            <th>Total / มูลค่ารวม / 总额</th>
+            <th>Status / สถานะ / 状态</th>
+            <th style="width:70px;">View / ดู / 查看</th>
+          </tr>
+        </thead>
+        <tbody id="legacy-po-tbody"></tbody>
+      </table>
+    </div>
+    <div id="empty-legacy-po-state"></div>
+  </details>
+
   <div class="filter-bar">
     <select id="filter-status">
       <option value="">All Statuses / สถานะทั้งหมด / 全部状态</option>
@@ -202,6 +229,27 @@
     <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
       <button class="btn btn-outline" id="cj-view-close-btn">Close / ปิด / 关闭</button>
       <button class="btn btn-primary" id="cj-view-print-btn">🖨️ Print / พิมพ์ / 打印</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LEGACY PO VIEW MODAL ============ -->
+<div class="modal-overlay" id="legacy-po-view-modal" style="display:none;">
+  <div class="modal-sheet" style="max-width:760px;">
+    <div class="modal-header">
+      <h3 id="legacy-po-view-title">Purchase Order / ใบสั่งซื้อ / 采购单</h3>
+      <button class="icon-btn" id="close-legacy-po-view-modal">✕</button>
+    </div>
+    <div id="legacy-po-view-body"></div>
+    <div style="display:flex; align-items:center; gap:10px; justify-content:space-between; margin-top:16px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <label class="hint" style="margin:0;">Reassign project / ย้ายไปโปรเจกต์อื่น / 重新分配项目</label>
+        <select id="legacy-po-reassign-select" style="width:auto;"></select>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-sm" id="legacy-po-delete-btn" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5;">🗑️ Delete / ลบ / 删除</button>
+        <button class="btn btn-outline" id="legacy-po-view-close-btn">Close / ปิด / 关闭</button>
+      </div>
     </div>
   </div>
 </div>

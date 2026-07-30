@@ -7,6 +7,7 @@ import { T, claimStatusTri, jobTypeTri, contractorJobStatusTri } from "./i18n.js
 import { loadProjects, addProject, updateProject } from "./projects.js";
 import { addClaim, updateClaim, watchAllClaims, deleteClaim } from "./claims.js";
 import { watchAllContractorJobs, setPoNumber, passDeliveryInspection, failDeliveryInspection } from "./contractor-jobs.js";
+import { importLegacyPurchaseOrders, watchAllLegacyPOs, reassignLegacyPoProject, deleteLegacyPo } from "./legacy-po.js";
 import { compressImageToDataUrl } from "./image-compress.js";
 
 renderCompanyBrandBar("brand-bar", COMPANY);
@@ -72,9 +73,11 @@ if (currentAdmin) {
 let allClaims = [];
 let allProjects = [];
 let allContractorJobs = [];
+let allLegacyPOs = [];
 let selectedProjectScope = localStorage.getItem("progressClaimProjectScope") || "";
 let unsubClaims = null;
 let unsubContractorJobs = null;
+let unsubLegacyPOs = null;
 let mainStarted = false;
 
 async function main() {
@@ -109,6 +112,16 @@ async function main() {
     },
     () => showToast(T.msgConnectFailCheckInternet.th)
   );
+
+  // คลังใบสั่งซื้อเก่าจาก PEAK
+  unsubLegacyPOs = watchAllLegacyPOs(
+    (list) => {
+      allLegacyPOs = list;
+      renderLegacyPoTable();
+    },
+    () => showToast(T.msgConnectFailCheckInternet.th)
+  );
+  document.getElementById("import-legacy-po-btn").addEventListener("click", runLegacyPoImport);
 
   document.getElementById("project-switcher").addEventListener("change", (e) => {
     selectedProjectScope = e.target.value;
@@ -198,6 +211,7 @@ function render() {
   renderStats(list);
   renderTable(list);
   renderContractorJobsTable();
+  renderLegacyPoTable();
 }
 
 function filteredContractorJobs() {
@@ -207,14 +221,21 @@ function filteredContractorJobs() {
   });
 }
 
+function filteredLegacyPOs() {
+  return allLegacyPOs.filter((p) => {
+    if (selectedProjectScope && p.projectId !== selectedProjectScope) return false;
+    return true;
+  });
+}
+
 function renderStats(list) {
   const total = list.reduce((s, c) => s + (Number(c.claimAmount) || 0), 0);
   const approved = list.filter((c) => c.status === CLAIM_STATUS.APPROVED).reduce((s, c) => s + (Number(c.claimAmount) || 0), 0);
   const pending = list.filter((c) => c.status === CLAIM_STATUS.PENDING).length;
   document.getElementById("stat-grid").innerHTML = `
-    <div class="stat-card"><div class="num" style="color:#2563eb;">฿${formatMoney(total)}</div><div class="lbl">${T.totalClaimedLabel.th}</div></div>
-    <div class="stat-card"><div class="num" style="color:#10b981;">฿${formatMoney(approved)}</div><div class="lbl">${T.totalApprovedLabel.th}</div></div>
-    <div class="stat-card"><div class="num" style="color:#f59e0b;">${pending}</div><div class="lbl">${T.totalPendingLabel.th}</div></div>
+    <div class="stat-card" style="--stat-color:#2563eb;"><div class="stat-icon">💰</div><div class="stat-body"><div class="num" style="color:#2563eb;">฿${formatMoney(total)}</div><div class="lbl">${T.totalClaimedLabel.th}</div></div></div>
+    <div class="stat-card" style="--stat-color:#10b981;"><div class="stat-icon">✅</div><div class="stat-body"><div class="num" style="color:#10b981;">฿${formatMoney(approved)}</div><div class="lbl">${T.totalApprovedLabel.th}</div></div></div>
+    <div class="stat-card" style="--stat-color:#f59e0b;"><div class="stat-icon">⏳</div><div class="stat-body"><div class="num" style="color:#f59e0b;">${pending}</div><div class="lbl">${T.totalPendingLabel.th}</div></div></div>
   `;
 }
 
@@ -563,6 +584,171 @@ document.getElementById("cj-view-print-btn").addEventListener("click", () => {
   document.getElementById("print-report").innerHTML = buildDeliveryNoteHtml(j);
   showToast(T.pdfPrintHint.th);
   setTimeout(() => window.print(), 300);
+});
+
+// ============================================================
+//  LEGACY PURCHASE ORDER ARCHIVE (นำเข้าจาก PEAK ครั้งเดียว)
+// ============================================================
+async function runLegacyPoImport() {
+  const btn = document.getElementById("import-legacy-po-btn");
+  const statusEl = document.getElementById("legacy-po-import-status");
+  btn.disabled = true;
+  try {
+    statusEl.textContent = "กำลังนำเข้า... / Importing...";
+    const result = await importLegacyPurchaseOrders((done, total) => {
+      statusEl.textContent = `กำลังนำเข้า ${done}/${total}... / Importing ${done}/${total}...`;
+    });
+    await refreshProjects(); // อาจมีการสร้างโปรเจกต์ใหม่ระหว่างนำเข้า
+    statusEl.textContent = `เสร็จแล้ว: นำเข้าใหม่ ${result.created} รายการ, ข้ามที่มีอยู่แล้ว ${result.skipped} รายการ (รวม ${result.total}) / Done: ${result.created} imported, ${result.skipped} skipped (already imported), of ${result.total} total.`;
+    showToast(T.msgSaved.th);
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = "นำเข้าไม่สำเร็จ / Import failed: " + e.message;
+    showToast(T.msgSavedFail.th);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderLegacyPoTable() {
+  const tbody = document.getElementById("legacy-po-tbody");
+  const emptyState = document.getElementById("empty-legacy-po-state");
+  if (!tbody) return;
+  const list = filteredLegacyPOs();
+  if (!list.length) {
+    tbody.innerHTML = "";
+    emptyState.innerHTML = `<div class="hint" style="padding:16px; text-align:center;">No legacy purchase orders yet — click "Import from PEAK" above / ยังไม่มีข้อมูล กดปุ่ม "นำเข้าจาก PEAK" ด้านบน / 暂无数据，请点击上方"从PEAK导入"</div>`;
+    return;
+  }
+  emptyState.innerHTML = "";
+  tbody.innerHTML = list
+    .map(
+      (p) => `
+    <tr>
+      <td>${escapeHtml(p.poNumber || "")}</td>
+      <td>${formatDateThai(p.issueDate)}</td>
+      <td>${escapeHtml(p.project || "")}</td>
+      <td>${escapeHtml(p.contractorNickname || "")}</td>
+      <td>${escapeHtml(p.vendorName || "")}</td>
+      <td>฿${formatMoney(p.totalAmount)}</td>
+      <td><span class="cat-badge" style="background:#f1f5f9; color:#334155;">${escapeHtml(p.status || "")}</span></td>
+      <td><button class="btn btn-outline btn-sm legacy-po-view-btn" data-id="${p.id}" title="View / ดู / 查看">👁️</button></td>
+    </tr>`
+    )
+    .join("");
+  tbody.querySelectorAll(".legacy-po-view-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openLegacyPoView(btn.dataset.id));
+  });
+}
+
+let legacyPoViewingId = null;
+function buildLegacyPoDetailHtml(p) {
+  const lineRows = (p.lineItems || [])
+    .map(
+      (li) => `
+    <tr>
+      <td>${escapeHtml(li.desc || "")}</td>
+      <td style="text-align:right;">${li.qty ?? "-"}</td>
+      <td style="text-align:right;">${li.price != null ? Number(li.price).toLocaleString("th-TH") : "-"}</td>
+      <td style="text-align:right;">${li.amountBeforeTax != null ? Number(li.amountBeforeTax).toLocaleString("th-TH") : "-"}</td>
+    </tr>`
+    )
+    .join("");
+  return `
+    <div class="dn-doc">
+      <div class="dn-doc-title-bar">
+        <div class="dn-doc-title">
+          Purchase Order / ใบสั่งซื้อ
+          <span class="sub">${escapeHtml(p.contractorNickname || "")} — ${escapeHtml(p.vendorName || "")}</span>
+        </div>
+        <div class="dn-doc-no">
+          PO No. / เลขที่เอกสาร
+          <b>${escapeHtml(p.poNumber || "-")}</b>
+          <span class="dn-status-badge" style="background:#e2e8f0; color:#1f2937;">${escapeHtml(p.status || "")}</span>
+        </div>
+      </div>
+      <div class="dn-section-title">🗂️ Document Info / ข้อมูลเอกสาร</div>
+      <table class="dn-table">
+        <tr>
+          <td class="dn-label">Issue date<br>วันที่ออก</td>
+          <td class="dn-value">${formatDateThai(p.issueDate)}</td>
+          <td class="dn-label-2">Project<br>โปรเจกต์</td>
+          <td class="dn-value">${escapeHtml(p.project || "-")}</td>
+        </tr>
+      </table>
+      <div class="dn-section-title">📋 Line Items / รายการ</div>
+      <div style="padding:14px;">
+        <table class="print-report-table" style="font-size:13px;">
+          <thead><tr><th>Description / รายละเอียด</th><th style="width:70px;">Qty</th><th style="width:100px;">Price</th><th style="width:120px;">Amount</th></tr></thead>
+          <tbody>${lineRows}</tbody>
+        </table>
+      </div>
+      <div class="dn-section-title">💰 Totals / ยอดรวม</div>
+      <table class="dn-table">
+        <tr>
+          <td class="dn-label">Total<br>มูลค่ารวม</td>
+          <td class="dn-value"><b>฿${p.totalAmount != null ? Number(p.totalAmount).toLocaleString("th-TH") : "-"}</b></td>
+          <td class="dn-label-2">Net payable<br>ต้องชำระ</td>
+          <td class="dn-value"><b>฿${p.netPayable != null ? Number(p.netPayable).toLocaleString("th-TH") : "-"}</b></td>
+        </tr>
+        <tr>
+          <td class="dn-label">VAT<br>ภาษีมูลค่าเพิ่ม</td>
+          <td class="dn-value">฿${p.vatAmount != null ? Number(p.vatAmount).toLocaleString("th-TH") : "-"}</td>
+          <td class="dn-label-2">WHT<br>หัก ณ ที่จ่าย</td>
+          <td class="dn-value">฿${p.whtAmount != null ? Number(p.whtAmount).toLocaleString("th-TH") : "-"}</td>
+        </tr>
+      </table>
+      ${
+        p.notes
+          ? `<div class="dn-section-title">📝 Notes / หมายเหตุ (รวมข้อมูลบัญชีธนาคาร)</div>
+             <div style="padding:14px; white-space:pre-wrap; font-size:13px; color:#334155;">${escapeHtml(p.notes)}</div>`
+          : ""
+      }
+    </div>
+  `;
+}
+function openLegacyPoView(id) {
+  const p = allLegacyPOs.find((x) => x.id === id);
+  if (!p) return;
+  legacyPoViewingId = id;
+  document.getElementById("legacy-po-view-title").textContent = `Purchase Order / ใบสั่งซื้อ — ${p.poNumber || ""}`;
+  document.getElementById("legacy-po-view-body").innerHTML = buildLegacyPoDetailHtml(p);
+  const select = document.getElementById("legacy-po-reassign-select");
+  select.innerHTML = allProjects.map((proj) => `<option value="${proj.id}">${escapeHtml(proj.label)}</option>`).join("");
+  select.value = p.projectId || "";
+  document.getElementById("legacy-po-view-modal").style.display = "flex";
+}
+function closeLegacyPoView() {
+  document.getElementById("legacy-po-view-modal").style.display = "none";
+  legacyPoViewingId = null;
+}
+document.getElementById("close-legacy-po-view-modal").addEventListener("click", closeLegacyPoView);
+document.getElementById("legacy-po-view-close-btn").addEventListener("click", closeLegacyPoView);
+document.getElementById("legacy-po-reassign-select").addEventListener("change", async (e) => {
+  if (!legacyPoViewingId) return;
+  const proj = allProjects.find((p) => p.id === e.target.value);
+  if (!proj) return;
+  try {
+    await reassignLegacyPoProject(legacyPoViewingId, proj.id, proj.label);
+    showToast(T.msgSaved.th);
+  } catch (err) {
+    console.error(err);
+    showToast(T.msgSavedFail.th);
+  }
+});
+document.getElementById("legacy-po-delete-btn").addEventListener("click", async () => {
+  if (!legacyPoViewingId) return;
+  const p = allLegacyPOs.find((x) => x.id === legacyPoViewingId);
+  if (!p) return;
+  if (!confirm(`Delete PO "${p.poNumber || legacyPoViewingId}" permanently? This cannot be undone.\nลบใบสั่งซื้อ "${p.poNumber || legacyPoViewingId}" ถาวร? กู้คืนไม่ได้`)) return;
+  try {
+    await deleteLegacyPo(legacyPoViewingId);
+    showToast(T.msgSaved.th);
+    closeLegacyPoView();
+  } catch (err) {
+    console.error(err);
+    showToast(T.msgSavedFail.th);
+  }
 });
 
 // ลบรายการเบิกงวดงานถาวร (ตามคำขอ) — เตือนก่อนกดลบจริงเสมอ กู้คืนไม่ได้หลังลบแล้ว

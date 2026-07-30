@@ -80,5 +80,15 @@ service cloud.firestore {
       // เปิดให้ลบถาวรได้จากหน้าแอดมิน (ตามคำขอ) — กดลบแล้วกู้คืนไม่ได้
       allow delete: if true;
     }
+
+    // ---------------- progress-claim-app: คลังใบสั่งซื้อเก่าจาก PEAK (นำเข้าครั้งเดียว) ----------------
+    // เอกสารใบสั่งซื้อที่เคยออกผ่านโปรแกรมบัญชี PEAK มาก่อนหน้านี้ นำเข้ามาเก็บไว้ดูอ้างอิง/แยกตามโปรเจกต์
+    match /legacyPurchaseOrders/{poId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.resource.data.keys().hasAll(['poNumber', 'project']);
+      allow update: if true;
+      allow delete: if true;
+    }
   }
 }
