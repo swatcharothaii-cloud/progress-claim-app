@@ -152,6 +152,15 @@ async function main() {
   document.getElementById("save-claim-btn").addEventListener("click", saveClaim);
   document.getElementById("c-source-job").addEventListener("change", applySourceJobSelection);
   document.getElementById("c-progress").addEventListener("input", recalcClaimAmount);
+  // เปลี่ยนโปรเจกต์ในฟอร์ม → รายการ PO/ใบส่งมอบงานด้านล่างต้องกรองใหม่ตามโปรเจกต์นั้น และเคลียร์การอ้างอิง PO เดิมทิ้ง
+  // (เพราะ PO เดิมอาจไม่ได้อยู่ในโปรเจกต์ใหม่ที่เพิ่งเลือก)
+  document.getElementById("c-project").addEventListener("change", (e) => {
+    refreshSourceJobOptions("", "", e.target.value);
+    document.getElementById("c-po-number").value = "";
+    document.getElementById("c-job-no").value = "";
+    document.getElementById("c-po-amount").value = "";
+    sourceJobPoAmount = null;
+  });
   document.getElementById("c-images").addEventListener("change", handleImageSelect);
 
   document.getElementById("project-add-form").addEventListener("submit", async (e) => {
@@ -1155,16 +1164,18 @@ function openClaimModal(claim) {
     : `Add Progress Claim / เพิ่มรายการเบิกงวดงาน / 新增申请`;
   document.getElementById("c-id").value = claim ? claim.id : "";
   document.getElementById("c-claimId").value = claim ? claim.claimId : "(auto)";
-  document.getElementById("c-project").value = claim ? claim.projectId : allProjects.find((p) => p.active !== false)?.id || "";
+  const openProjectId = claim ? claim.projectId : allProjects.find((p) => p.active !== false)?.id || "";
+  document.getElementById("c-project").value = openProjectId;
   document.getElementById("c-workItem").value = claim ? claim.workItem : "";
   document.getElementById("c-progress").value = claim ? claim.progressPercent : "";
   document.getElementById("c-amount").value = claim ? claim.claimAmount : "";
   document.getElementById("c-date").value = claim ? claim.claimDate : todayStr();
   document.getElementById("c-status").value = claim ? claim.status : CLAIM_STATUS.PENDING;
   document.getElementById("c-notes").value = claim ? claim.notes || "" : "";
+  // ต้องเลือกโปรเจกต์ก่อนเสมอ แล้วรายการ PO/ใบส่งมอบงานด้านล่างจะกรองเฉพาะโปรเจกต์นั้น
   // claim เก่าก่อนรองรับ PEAK (ไม่มีฟิลด์ sourceType) แต่มี sourceJobId แล้ว ให้ถือว่าอ้างอิงจาก "งานผู้รับเหมา" ตามเดิม
   const openSourceType = claim ? claim.sourceType || (claim.sourceJobId ? "job" : "") : "";
-  refreshSourceJobOptions(openSourceType, claim ? claim.sourceJobId || "" : "");
+  refreshSourceJobOptions(openSourceType, claim ? claim.sourceJobId || "" : "", openProjectId);
   document.getElementById("c-po-number").value = claim ? claim.poNumber || "" : "";
   document.getElementById("c-job-no").value = claim ? claim.sourceJobNo || "" : "";
   sourceJobPoAmount = claim && claim.poAmount != null ? Number(claim.poAmount) : null;
@@ -1194,22 +1205,29 @@ function recalcClaimAmount() {
 
 // รายชื่องานผู้รับเหมาที่ "มีเลขที่ PO แล้ว" เท่านั้น — ใช้เป็นตัวเลือกให้ผูกรายการเบิกงวดกับ PO/ใบส่งมอบงาน
 // (ข้อมูลชุดเดียวกับที่ repair-app สร้างไว้ อ่านแบบเรียลไทม์ผ่าน allContractorJobs ที่ subscribe ไว้ตั้งแต่ main())
-function jobsWithPO() {
-  return allContractorJobs.filter((j) => (j.poNumber || "").trim());
+// กรองเฉพาะโปรเจกต์ที่เลือกไว้ในฟอร์ม (projectId) เท่านั้น — ไม่งั้นรายการ PO จากทุกโปรเจกต์จะปนกันจนหาไม่เจอ
+function jobsWithPO(projectId) {
+  return allContractorJobs.filter((j) => (j.poNumber || "").trim() && j.projectId === projectId);
 }
 
-// รายการ PO เก่าที่นำเข้าจาก PEAK ทั้งหมด (allLegacyPOs — subscribe ไว้ตั้งแต่ main() เช่นกัน)
-// ทุกรายการมีเลขที่ PO อยู่แล้วตั้งแต่ตอนนำเข้า จึงไม่ต้อง filter เพิ่ม
-function legacyPOsList() {
-  return allLegacyPOs;
+// รายการ PO เก่าที่นำเข้าจาก PEAK เฉพาะของโปรเจกต์ที่เลือกไว้ (allLegacyPOs — subscribe ไว้ตั้งแต่ main() เช่นกัน)
+function legacyPOsList(projectId) {
+  return allLegacyPOs.filter((p) => p.projectId === projectId);
 }
 
 // dropdown เลือกอ้างอิง รองรับ 2 แหล่ง: งานผู้รับเหมาในระบบ (job:<id>) และ PO เก่าจาก PEAK (legacy:<id>)
 // ใช้ prefix แยกแหล่งข้อมูลเพราะ id ของทั้งสอง collection ไม่เกี่ยวข้องกัน อาจซ้ำกันได้โดยบังเอิญ
-function refreshSourceJobOptions(selectedType, selectedId) {
+// ต้องเลือกโปรเจกต์ (projectId) ก่อนเสมอ — ถ้ายังไม่เลือก จะปิดการใช้งาน dropdown นี้ไว้ก่อน
+function refreshSourceJobOptions(selectedType, selectedId, projectId) {
   const sel = document.getElementById("c-source-job");
-  const jobs = jobsWithPO();
-  const legacy = legacyPOsList();
+  if (!projectId) {
+    sel.innerHTML = `<option value="">— Select a project first / กรุณาเลือกโปรเจกต์ก่อน / 请先选择项目 —</option>`;
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  const jobs = jobsWithPO(projectId);
+  const legacy = legacyPOsList(projectId);
   let html = `<option value="">— No reference / ไม่อ้างอิง / 不关联 —</option>`;
   if (jobs.length) {
     html +=
@@ -1238,15 +1256,8 @@ function refreshSourceJobOptions(selectedType, selectedId) {
   sel.value = Array.from(sel.options).some((o) => o.value === wantValue) ? wantValue : "";
 }
 
-// เติมโปรเจกต์ในฟอร์มให้ตรงกับงาน/PO ที่เลือกอ้างอิง (ถ้าโปรเจกต์นั้นมีอยู่ใน dropdown ของฟอร์ม)
-function applyProjectAutoFill(projectId) {
-  const projectSel = document.getElementById("c-project");
-  if (projectId && Array.from(projectSel.options).some((o) => o.value === projectId)) {
-    projectSel.value = projectId;
-  }
-}
-
-// เลือกรายการจาก dropdown แล้วดึงเลขที่ PO / เลขที่ใบส่งมอบงาน / ยอดเงินมาเติมอัตโนมัติ พร้อมช่วยเติมโปรเจกต์ให้ตรงกัน
+// เลือกรายการจาก dropdown แล้วดึงเลขที่ PO / เลขที่ใบส่งมอบงาน / ยอดเงินมาเติมอัตโนมัติ
+// (ไม่ต้องเติมโปรเจกต์ให้อีกต่อไป เพราะรายการใน dropdown นี้กรองมาจากโปรเจกต์ที่เลือกไว้แล้วตั้งแต่ต้น)
 // และเติม "รายการงาน" ให้ถ้ายังไม่ได้พิมพ์อะไรไว้ (ไม่ทับของที่ผู้ใช้พิมพ์เองแล้ว) — รองรับทั้งงานผู้รับเหมาในระบบและ PO เก่าจาก PEAK
 function applySourceJobSelection() {
   const raw = document.getElementById("c-source-job").value;
@@ -1266,7 +1277,6 @@ function applySourceJobSelection() {
     if (!job) return;
     document.getElementById("c-po-number").value = job.poNumber || "";
     document.getElementById("c-job-no").value = job.jobId || "";
-    applyProjectAutoFill(job.projectId);
     const workItemEl = document.getElementById("c-workItem");
     if (!workItemEl.value.trim() && job.description) {
       workItemEl.value = job.description;
@@ -1277,7 +1287,6 @@ function applySourceJobSelection() {
     if (!po) return;
     document.getElementById("c-po-number").value = po.poNumber || "";
     document.getElementById("c-job-no").value = ""; // PO เก่าจาก PEAK ไม่มีเลขที่ใบส่งมอบงานในระบบนี้
-    applyProjectAutoFill(po.projectId);
     const workItemEl = document.getElementById("c-workItem");
     if (!workItemEl.value.trim() && po.contractorNickname) {
       workItemEl.value = `งานผู้รับเหมา: ${po.contractorNickname}`;

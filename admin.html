@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Progress Claim Admin / ระบบเบิกงวดงาน (แอดมิน) / 工程款申请管理</title>
+<title>Payment Progress / ระบบเบิกงวดงาน (แอดมิน) / 工程款支付进度</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
@@ -25,7 +25,7 @@
 
   <div class="admin-topbar">
     <div>
-      <h2 style="margin:0;">🧾 Progress Claim Admin / ระบบเบิกงวดงาน / 工程款申请管理</h2>
+      <h2 style="margin:0;">🧾 Payment Progress / ระบบเบิกงวดงาน / 工程款支付进度</h2>
       <div class="hint" id="admin-whoami"></div>
     </div>
     <div style="display:flex; gap:8px;">
@@ -155,12 +155,18 @@
     <input type="hidden" id="c-id">
     <div class="field"><label>Claim No. / เลขที่เบิก / 单号</label><input type="text" id="c-claimId" disabled></div>
 
+    <div class="field">
+      <label>Project * / โปรเจกต์ * / 项目 *</label>
+      <select id="c-project" required></select>
+      <p class="hint" style="margin-top:6px;">Pick the project first — the PO/delivery-note list below will be filtered to this project only / เลือกโปรเจกต์ก่อน รายการ PO/ใบส่งมอบงานด้านล่างจะกรองเฉพาะโปรเจกต์นี้ / 请先选择项目，下方PO/交付单列表将仅显示该项目的记录</p>
+    </div>
+
     <div class="field" style="background:#f8fafc; border:1px solid var(--border); border-radius:12px; padding:12px 14px;">
       <label>🔗 Link to delivery note / PO (optional) / อ้างอิงใบส่งมอบงาน / PO (ถ้ามี) / 关联交付单/PO（可选）</label>
       <select id="c-source-job">
         <option value="">— No reference / ไม่อ้างอิง / 不关联 —</option>
       </select>
-      <p class="hint" style="margin-top:6px;">Pick a contractor job or a PEAK-imported PO to auto-fill its project, PO number, and amount below / เลือกได้ทั้งงานผู้รับเหมาในระบบ หรือ PO เก่าที่นำเข้าจาก PEAK เพื่อดึงโปรเจกต์ เลขที่ PO และยอดเงินมาให้อัตโนมัติ / 可选择系统内的承包商工作，或从PEAK导入的旧PO，自动带入项目、PO单号与金额</p>
+      <p class="hint" style="margin-top:6px;">Pick a contractor job or a PEAK-imported PO (from the selected project) to auto-fill its PO number and amount below / เลือกได้ทั้งงานผู้รับเหมาในระบบ หรือ PO เก่าที่นำเข้าจาก PEAK (เฉพาะของโปรเจกต์ที่เลือกไว้) เพื่อดึงเลขที่ PO และยอดเงินมาให้อัตโนมัติ / 可选择系统内的承包商工作，或从PEAK导入的旧PO（仅限所选项目），自动带入PO单号与金额</p>
       <div style="display:flex; gap:12px; margin-top:10px;">
         <div class="field" style="flex:1; margin-bottom:0;">
           <label>PO Number / เลขที่ PO / PO单号</label>
@@ -176,11 +182,6 @@
         <input type="text" id="c-po-amount" disabled placeholder="-">
         <p class="hint" style="margin-top:4px;">Claim amount below is auto-calculated as PO amount × progress % — you can still edit it manually / ยอดเบิกด้านล่างคำนวณอัตโนมัติจาก ยอดเงิน PO × % ความคืบหน้า — แก้ไขเองภายหลังได้ / 下方申请金额自动按PO金额×进度%计算，仍可手动修改</p>
       </div>
-    </div>
-
-    <div class="field">
-      <label>Project * / โปรเจกต์ * / 项目 *</label>
-      <select id="c-project" required></select>
     </div>
 
     <div class="field">
