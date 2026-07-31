@@ -200,20 +200,20 @@
       </div>
     </div>
 
-    <div style="display:flex; gap:12px;">
-      <div class="field" style="flex:1;">
-        <label>Claim date * / วันที่เบิก * / 申请日期 *</label>
-        <input type="date" id="c-date" required>
-      </div>
-      <div class="field" style="flex:1;">
-        <label>Status / สถานะ / 状态</label>
-        <select id="c-status"></select>
-      </div>
+    <div class="field">
+      <label>Claim date * / วันที่เบิก * / 申请日期 *</label>
+      <input type="date" id="c-date" required style="max-width:220px;">
     </div>
 
     <div class="field">
       <label>Notes / หมายเหตุ / 备注</label>
       <textarea id="c-notes" rows="2"></textarea>
+    </div>
+
+    <div class="field">
+      <label>Approval status / สถานะการอนุมัติ / 审批状态</label>
+      <p class="hint" id="c-approval-resubmit-warn" style="display:none; color:#92400e;">⚠️ Saving changes will reset the approval process back to step 1 / การบันทึกจะรีเซ็ตกระบวนการอนุมัติกลับไปขั้นตอนที่ 1 / 保存修改将重置审批流程至第1步</p>
+      <div id="c-approval-preview"></div>
     </div>
 
     <div class="field">
@@ -296,27 +296,6 @@
         <button class="btn btn-sm" id="legacy-po-delete-btn" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5;">🗑️ Delete / ลบ / 删除</button>
         <button class="btn btn-outline" id="legacy-po-view-close-btn">Close / ปิด / 关闭</button>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============ LEGACY PO DELIVERY NOTE MODAL ============ -->
-<div class="modal-overlay" id="legacy-po-delivery-modal" style="display:none;">
-  <div class="modal-sheet" style="max-width:760px;">
-    <div class="modal-header">
-      <h3 id="legacy-po-delivery-title">Delivery Note / ใบส่งมอบงาน / 交付单</h3>
-      <button class="icon-btn" id="close-legacy-po-delivery-modal">✕</button>
-    </div>
-    <p class="hint">Upload photos, then set a description, progress %, and pass/fail status for each photo individually / อัปโหลดรูปภาพ แล้วใส่คำอธิบาย % ความคืบหน้า และสถานะผ่าน/ไม่ผ่านของแต่ละภาพแยกกัน / 上传照片后，可分别为每张照片填写说明、进度百分比与验收状态</p>
-    <div class="field">
-      <label>Add photos / เพิ่มรูปภาพ / 添加照片</label>
-      <input type="file" id="legacy-po-delivery-images" accept="image/*" multiple>
-    </div>
-    <div id="legacy-po-delivery-photo-list"></div>
-    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;">
-      <button class="btn btn-outline" id="legacy-po-delivery-print-btn">🖨️ Save &amp; print / บันทึกแล้วพิมพ์ / 保存并打印</button>
-      <button class="btn btn-outline" id="cancel-legacy-po-delivery-btn">Close / ปิด / 关闭</button>
-      <button class="btn btn-primary" id="save-legacy-po-delivery-btn">💾 Save / บันทึก / 保存</button>
     </div>
   </div>
 </div>

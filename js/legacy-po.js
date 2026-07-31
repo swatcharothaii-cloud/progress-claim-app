@@ -2,9 +2,10 @@
 // นำเข้าครั้งเดียวจากไฟล์ data/legacy-po-import-2026.json (แปลงมาจากไฟล์ Excel ที่ผู้ใช้อัปโหลดให้)
 // แล้วเก็บไว้ใน collection "legacyPurchaseOrders" เพื่อดูอ้างอิง/แยกตามโปรเจกต์ — เป็นข้อมูลเก็บถาวร
 // ไม่มีการแก้ไขยอดเงินจากหน้านี้ (แก้ได้แค่ "โปรเจกต์ที่สังกัด" เผื่อจัดกลุ่มผิดตอนนำเข้า)
-import { db, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp } from "./firebase-init.js";
+import { db, collection, doc, addDoc, updateDoc, deleteDoc, getDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp } from "./firebase-init.js";
 import { LEGACY_PO_COLLECTION, PROJECTS_COLLECTION } from "./firebase-init.js";
 import { loadProjects, addProject } from "./projects.js";
+import { createFreshApproval, approveApprovalStep, rejectApprovalStep } from "./approval.js";
 
 const IMPORT_DATA_URL = "./data/legacy-po-import-2026.json";
 
@@ -128,12 +129,47 @@ export async function deleteLegacyPo(id) {
   await deleteDoc(doc(db, LEGACY_PO_COLLECTION, id));
 }
 
-// บันทึกใบส่งมอบงาน (ภาพถ่าย) ของ PO เก่ารายการนี้โดยเฉพาะ — แต่ละภาพมีคำอธิบาย, % ความคืบหน้า,
-// และสถานะผ่าน/ไม่ผ่านแยกกันเป็นรายภาพ (ไม่ใช่สถานะรวมทั้งใบเหมือนงานผู้รับเหมาปกติ)
-export async function updateLegacyPoDeliveryPhotos(id, photos, updatedBy) {
+// ดึงข้อมูล PO เก่ารายการเดียวตาม id — ใช้โดยหน้าฟอร์มใบส่งมอบงาน (delivery-note.html) ที่เปิดจากลิงก์แยก
+export async function getLegacyPoById(id) {
+  const snap = await getDoc(doc(db, LEGACY_PO_COLLECTION, id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+// บันทึกใบส่งมอบงานฉบับเต็มของ PO เก่ารายการนี้โดยเฉพาะ — รูปภาพ (แต่ละรูปมีคำอธิบาย/% ความคืบหน้า/
+// สถานะผ่าน-ไม่ผ่านแยกกันเป็นรายภาพ) รวมถึงวันที่ส่งมอบ
+// ทุกครั้งที่แก้ไขเนื้อหา (บันทึก) จะเริ่มกระบวนการอนุมัติ 4 ขั้นตอนใหม่เสมอ (ตามที่ตกลงกันไว้: แก้ไขแล้วต้องส่งใหม่ตั้งแต่ขั้นตอนที่ 1)
+export async function updateLegacyPoDeliveryNote(id, data, updatedBy) {
   await updateDoc(doc(db, LEGACY_PO_COLLECTION, id), {
-    deliveryPhotos: photos || [],
+    deliveryPhotos: data.deliveryPhotos || [],
+    deliveryDate: data.deliveryDate || "",
+    approval: createFreshApproval(),
     deliveryNoteUpdatedAt: serverTimestamp(),
     deliveryNoteUpdatedBy: updatedBy || "",
   });
+}
+
+// ---- ระบบอนุมัติ 4 ขั้นตอนสำหรับใบส่งมอบงาน PO เก่า (ใครก็ได้ที่ล็อกอินอยู่ กดแทนขั้นตอนไหนก็ได้) ----
+export async function approveLegacyPoDeliveryStep(id, actorName, note) {
+  const snap = await getDoc(doc(db, LEGACY_PO_COLLECTION, id));
+  const p = snap.exists() ? snap.data() : null;
+  const approval = approveApprovalStep(p?.approval, actorName, note, serverTimestamp);
+  await updateDoc(doc(db, LEGACY_PO_COLLECTION, id), {
+    approval,
+    deliveryNoteUpdatedAt: serverTimestamp(),
+    deliveryNoteUpdatedBy: actorName || "",
+  });
+  return approval;
+}
+
+// ปฏิเสธขั้นตอนปัจจุบัน — จบกระบวนการทันที ต้องแก้ไขแล้วบันทึกใหม่ (updateLegacyPoDeliveryNote) จึงจะเริ่มใหม่ได้
+export async function rejectLegacyPoDeliveryStep(id, actorName, note) {
+  const snap = await getDoc(doc(db, LEGACY_PO_COLLECTION, id));
+  const p = snap.exists() ? snap.data() : null;
+  const approval = rejectApprovalStep(p?.approval, actorName, note, serverTimestamp);
+  await updateDoc(doc(db, LEGACY_PO_COLLECTION, id), {
+    approval,
+    deliveryNoteUpdatedAt: serverTimestamp(),
+    deliveryNoteUpdatedBy: actorName || "",
+  });
+  return approval;
 }

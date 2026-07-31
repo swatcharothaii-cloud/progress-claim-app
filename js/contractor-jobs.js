@@ -6,9 +6,10 @@
 // ขอบเขตของไฟล์นี้ (ตามที่ตกลงกับผู้ใช้งาน): ดูรายการทั้งหมด + กำหนด/แก้ไขเลขที่ PO + ตรวจรับงาน
 // (ผ่าน/ไม่ผ่าน) ได้จากหน้านี้เลย ส่วนการ "สร้างงานส่งให้ผู้รับเหมา" และ "ตอบรับ/เสนอราคาของผู้รับเหมา"
 // ยังคงทำที่ repair-app เท่านั้น (ยังไม่มีความจำเป็นต้องย้ายมาที่นี่)
-import { db, collection, doc, updateDoc, onSnapshot, query, orderBy, serverTimestamp } from "./firebase-init.js";
+import { db, collection, doc, getDoc, updateDoc, onSnapshot, query, orderBy, serverTimestamp } from "./firebase-init.js";
 import { CONTRACTOR_JOBS_COLLECTION } from "./firebase-init.js";
 import { CONTRACTOR_JOB_STATUS } from "./config.js";
+import { createFreshApproval, approveApprovalStep, rejectApprovalStep, APPROVAL_STATUS } from "./approval.js";
 
 // subscribe งานผู้รับเหมาทั้งหมด (ใหม่สุดก่อน) — ใช้ค่าเดียวกันไม่ว่าจะเปิดจากแอปไหน
 export function watchAllContractorJobs(cb, onErr) {
@@ -31,31 +32,48 @@ export async function setPoNumber(id, poNumber) {
   });
 }
 
-// ตรวจรับงานที่ผู้รับเหมาส่งมอบมา — ผ่าน (ปิดงานเสร็จสิ้น)
-export async function passDeliveryInspection(id, { round, inspectorName, note }) {
-  await updateDoc(doc(db, CONTRACTOR_JOBS_COLLECTION, id), {
-    inspectionRound: round,
-    lastInspectionResult: "passed",
-    lastInspectionBy: (inspectorName || "").trim(),
-    lastInspectionNote: (note || "").trim(),
-    lastInspectionAt: serverTimestamp(),
-    deliveryAccepted: true,
-    deliveryAcceptedBy: (inspectorName || "").trim(),
-    deliveryAcceptedAt: serverTimestamp(),
-    status: CONTRACTOR_JOB_STATUS.DONE,
-    updatedAt: serverTimestamp(),
-  });
+// ---- ตรวจรับงานที่ผู้รับเหมาส่งมอบมา — ระบบอนุมัติ 4 ขั้นตอน (ทีมงาน/PM/จัดซื้อ/ผู้บริหาร) ----
+// ใครก็ได้ที่ล็อกอินอยู่ (actorName = currentAdmin.name) กดแทนขั้นตอนไหนก็ได้ ไม่มีการบังคับสิทธิ์ตามตำแหน่งจริง
+// อนุมัติขั้นตอนปัจจุบัน — ถ้าเป็นขั้นตอนสุดท้าย (ขั้นที่ 4) จะถือว่า "ตรวจรับผ่านทั้งหมด" ปิดงานเสร็จสิ้นทันที
+export async function approveJobDeliveryStep(id, actorName, note) {
+  const snap = await getDoc(doc(db, CONTRACTOR_JOBS_COLLECTION, id));
+  const job = snap.exists() ? snap.data() : null;
+  const approval = approveApprovalStep(job?.approval, actorName, note, serverTimestamp);
+  const patch = { approval, updatedAt: serverTimestamp() };
+  if (approval.status === APPROVAL_STATUS.APPROVED) {
+    const round = (job?.inspectionRound || 0) + 1;
+    Object.assign(patch, {
+      inspectionRound: round,
+      lastInspectionResult: "passed",
+      lastInspectionBy: (actorName || "").trim(),
+      lastInspectionNote: (note || "").trim(),
+      lastInspectionAt: serverTimestamp(),
+      deliveryAccepted: true,
+      deliveryAcceptedBy: (actorName || "").trim(),
+      deliveryAcceptedAt: serverTimestamp(),
+      status: CONTRACTOR_JOB_STATUS.DONE,
+    });
+  }
+  await updateDoc(doc(db, CONTRACTOR_JOBS_COLLECTION, id), patch);
+  return approval;
 }
 
-// ตรวจรับงาน — ไม่ผ่าน (รีเซ็ตให้ผู้รับเหมาส่งมอบงานใหม่)
-export async function failDeliveryInspection(id, { round, inspectorName, note }) {
+// ปฏิเสธขั้นตอนปัจจุบัน — จบกระบวนการทันที (ตรวจไม่ผ่าน) ผู้รับเหมาต้องส่งมอบงานใหม่ (submitDelivery จะเริ่มกระบวนการใหม่)
+export async function rejectJobDeliveryStep(id, actorName, note) {
+  const snap = await getDoc(doc(db, CONTRACTOR_JOBS_COLLECTION, id));
+  const job = snap.exists() ? snap.data() : null;
+  const approval = rejectApprovalStep(job?.approval, actorName, note, serverTimestamp);
+  const round = (job?.inspectionRound || 0) + 1;
   await updateDoc(doc(db, CONTRACTOR_JOBS_COLLECTION, id), {
+    approval,
     inspectionRound: round,
     lastInspectionResult: "failed",
-    lastInspectionBy: (inspectorName || "").trim(),
+    lastInspectionBy: (actorName || "").trim(),
     lastInspectionNote: (note || "").trim(),
     lastInspectionAt: serverTimestamp(),
+    // รีเซ็ตให้ผู้รับเหมาส่งมอบงานใหม่อีกครั้ง (deliveryAccepted ยังเป็น false อยู่แล้ว ไม่ต้องแก้)
     deliverySubmitted: false,
     updatedAt: serverTimestamp(),
   });
+  return approval;
 }

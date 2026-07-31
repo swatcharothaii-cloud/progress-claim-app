@@ -1,7 +1,8 @@
 import { COMPANY, CLAIM_STATUS } from "./config.js";
 import { renderCompanyBrandBar, renderCompanyFooter, formatDateThai, formatMoney, showToast, escapeHtml } from "./utils.js";
 import { T, claimStatusTri } from "./i18n.js";
-import { watchClaim, approveClaimPublic, rejectClaimPublic } from "./claims.js";
+import { watchClaim, approveClaimStep, rejectClaimStep } from "./claims.js";
+import { ensureApproval, renderApprovalStepper, APPROVAL_STATUS, APPROVAL_STEP_DEFS } from "./approval.js";
 
 renderCompanyBrandBar("brand-bar", COMPANY);
 renderCompanyFooter("app-footer", COMPANY);
@@ -42,32 +43,39 @@ function render() {
   }
   const c = currentClaim;
   const style = statusStyle(c.status);
+  const approval = ensureApproval(c.approval);
   const thumbs = (c.images || [])
     .map((img, i) => `<img src="${img.url}" data-idx="${i}" title="${T.clickToViewPhoto.th}">`)
     .join("");
 
+  const stepperHtml = renderApprovalStepper(approval, { lang: "all", escapeHtml });
+
   let actionHtml = "";
-  if (c.status === CLAIM_STATUS.PENDING) {
+  if (approval.status === APPROVAL_STATUS.IN_PROGRESS) {
+    const currentDef = APPROVAL_STEP_DEFS.find((d) => d.step === approval.currentStep);
     actionHtml = `
       <div class="card" style="margin-top:16px;">
+        <p class="hint">Currently waiting for step ${approval.currentStep}/4 — ${currentDef?.labelEn} / ${currentDef?.labelTh} / ${currentDef?.labelZh}. Anyone with the link can act on behalf of this step / ขั้นตอนนี้รอการอนุมัติจาก ${currentDef?.labelTh} — ใครก็ได้ที่มีลิงก์นี้กดแทนขั้นตอนนี้ได้เลย</p>
         <div class="field">
-          <label>Your name (optional) / ชื่อผู้อนุมัติ (ไม่บังคับ) / 审批人姓名（可选）</label>
+          <label>Your name / ชื่อผู้อนุมัติ / 审批人姓名</label>
           <input type="text" id="approver-name" placeholder="e.g. K.Somchai">
+        </div>
+        <div class="field">
+          <label>Note (optional) / หมายเหตุ (ถ้ามี) / 备注（可选）</label>
+          <input type="text" id="approver-note" placeholder="">
         </div>
         <div style="display:flex; gap:10px;">
           <button class="btn btn-primary btn-block" id="approve-btn">✅ ${T.btnApprove.en} / ${T.btnApprove.th} / ${T.btnApprove.zh}</button>
           <button class="btn btn-outline btn-block" id="reject-btn">❌ ${T.btnReject.en} / ${T.btnReject.th} / ${T.btnReject.zh}</button>
         </div>
       </div>`;
-  } else if (c.status === CLAIM_STATUS.APPROVED) {
+  } else if (approval.status === APPROVAL_STATUS.APPROVED) {
     actionHtml = `<div class="card" style="background:#d1fae5; margin-top:16px;">
-      <strong>✅ Approved / อนุมัติแล้ว / 已批准</strong>
-      ${c.approvedBy ? `<div class="meta" style="margin-top:6px;">By / โดย / 批准人: ${escapeHtml(c.approvedBy)}</div>` : ""}
+      <strong>✅ Approved — all 4 steps complete / อนุมัติครบทุกขั้นตอนแล้ว / 已全部批准</strong>
     </div>`;
-  } else if (c.status === CLAIM_STATUS.REJECTED) {
+  } else if (approval.status === APPROVAL_STATUS.REJECTED) {
     actionHtml = `<div class="card" style="background:#fee2e2; margin-top:16px;">
-      <strong>❌ Rejected / ปฏิเสธ / 已拒绝</strong>
-      ${c.approvedBy ? `<div class="meta" style="margin-top:6px;">By / โดย / 处理人: ${escapeHtml(c.approvedBy)}</div>` : ""}
+      <strong>❌ Rejected — please revise and resubmit / ถูกปฏิเสธ ต้องแก้ไขแล้วส่งใหม่ / 已拒绝，请修改后重新提交</strong>
     </div>`;
   }
 
@@ -85,6 +93,7 @@ function render() {
     <div class="meta" style="margin-top:8px;">${T.claimDateLabel.th}: ${formatDateThai(c.claimDate)} · #${escapeHtml(c.claimId || "")}</div>
     ${c.notes ? `<div class="desc" style="margin-top:8px;">${escapeHtml(c.notes)}</div>` : ""}
     ${thumbs ? `<div class="meta" style="margin-top:12px;">${T.photosLabel.th}</div><div class="ticket-thumbs">${thumbs}</div>` : ""}
+    ${stepperHtml}
     <div id="claim-action"></div>
   `;
 
@@ -101,10 +110,15 @@ function wireActionHandlers() {
   if (approveBtn) {
     approveBtn.addEventListener("click", async () => {
       if (submitting) return;
-      submitting = true;
       const name = document.getElementById("approver-name").value.trim();
+      if (!name) {
+        showToast("Please enter your name / กรุณากรอกชื่อผู้อนุมัติ / 请输入姓名");
+        return;
+      }
+      submitting = true;
+      const note = document.getElementById("approver-note")?.value.trim() || "";
       try {
-        await approveClaimPublic(currentClaim.id, name);
+        await approveClaimStep(currentClaim.id, name, note);
         showToast("Approved / อนุมัติแล้ว / 已批准");
       } catch (e) {
         console.error(e);
@@ -119,11 +133,16 @@ function wireActionHandlers() {
   if (rejectBtn) {
     rejectBtn.addEventListener("click", async () => {
       if (submitting) return;
-      if (!confirm("Reject this claim? / ยืนยันการปฏิเสธรายการนี้? / 确认拒绝此申请？")) return;
-      submitting = true;
       const name = document.getElementById("approver-name").value.trim();
+      if (!name) {
+        showToast("Please enter your name / กรุณากรอกชื่อผู้อนุมัติ / 请输入姓名");
+        return;
+      }
+      if (!confirm("Reject this claim? The process will end and it must be revised and resubmitted from step 1 / ยืนยันการปฏิเสธรายการนี้? กระบวนการจะจบทันที ต้องแก้ไขแล้วส่งใหม่ตั้งแต่ขั้นตอนที่ 1 / 确认拒绝？流程将立即结束，需修改后从第1步重新提交")) return;
+      submitting = true;
+      const note = document.getElementById("approver-note")?.value.trim() || "";
       try {
-        await rejectClaimPublic(currentClaim.id, name);
+        await rejectClaimStep(currentClaim.id, name, note);
         showToast("Rejected / ปฏิเสธแล้ว / 已拒绝");
       } catch (e) {
         console.error(e);
