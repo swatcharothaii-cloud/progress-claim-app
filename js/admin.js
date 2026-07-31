@@ -1,6 +1,7 @@
 import {
   ADMINS, COMPANY, CLAIM_STATUS, MAX_IMAGES, MAX_IMAGE_MB,
   CONTRACTOR_JOB_TYPE, CONTRACTOR_JOB_TYPE_STYLE, CONTRACTOR_JOB_STATUS, CONTRACTOR_JOB_STATUS_STYLE,
+  OTHER_APP_URL,
 } from "./config.js";
 import { renderCompanyBrandBar, showToast, formatDateThai, formatMoney, escapeHtml, todayStr } from "./utils.js";
 import { T, claimStatusTri, jobTypeTri, contractorJobStatusTri } from "./i18n.js";
@@ -61,11 +62,6 @@ function showDashboard() {
   whoamiEl.textContent = currentAdmin ? `👤 ${currentAdmin.name}` : "";
   main();
 }
-if (currentAdmin) {
-  showDashboard();
-} else {
-  identityScreen.style.display = "flex";
-}
 
 // ============================================================
 //  MAIN
@@ -75,10 +71,20 @@ let allProjects = [];
 let allContractorJobs = [];
 let allLegacyPOs = [];
 let selectedProjectScope = localStorage.getItem("progressClaimProjectScope") || "";
+let crossAppProjectApplied = false; // กันไม่ให้ ?project=... จาก URL ถูกใช้ซ้ำทุกครั้งที่ refreshProjects() รันใหม่
 let unsubClaims = null;
 let unsubContractorJobs = null;
 let unsubLegacyPOs = null;
 let mainStarted = false;
+
+// เรียก showDashboard()/main() ตรงนี้ (หลังประกาศตัวแปร state ทั้งหมดข้างบนแล้ว) — ถ้าเรียกตอนที่ยังไม่ถึง
+// บรรทัดประกาศ "let mainStarted" ฯลฯ ด้านบน จะเจอ ReferenceError "Cannot access ... before initialization"
+// เพราะ main() อ้างถึงตัวแปรเหล่านี้ทันทีที่ถูกเรียก (เคสนี้เกิดขึ้นทุกครั้งที่แอดมินเคยเลือกชื่อไว้แล้วเปิดหน้าใหม่)
+if (currentAdmin) {
+  showDashboard();
+} else {
+  identityScreen.style.display = "flex";
+}
 
 async function main() {
   if (mainStarted) return;
@@ -126,6 +132,7 @@ async function main() {
   document.getElementById("project-switcher").addEventListener("change", (e) => {
     selectedProjectScope = e.target.value;
     localStorage.setItem("progressClaimProjectScope", selectedProjectScope);
+    updateOtherAppLink();
     render();
   });
   document.getElementById("filter-status").addEventListener("change", render);
@@ -154,6 +161,21 @@ async function main() {
 
 async function refreshProjects() {
   allProjects = await loadProjects();
+
+  // เชื่อมต่อ 2 ระบบ: ถ้าเปิดหน้านี้มาจากปุ่ม "🔗" ของ repair-app จะมี ?project=<ชื่อโปรเจกต์> ติดมาด้วย
+  // (repair-app เก็บขอบเขตโปรเจกต์เป็น "ชื่อ" แต่ที่นี่เก็บเป็น "id" — ต้องหา id ที่ label ตรงกันก่อน)
+  if (!crossAppProjectApplied) {
+    crossAppProjectApplied = true;
+    const urlProjectLabel = new URLSearchParams(location.search).get("project");
+    if (urlProjectLabel) {
+      const match = allProjects.find((p) => p.label === urlProjectLabel);
+      if (match) {
+        selectedProjectScope = match.id;
+        localStorage.setItem("progressClaimProjectScope", selectedProjectScope);
+      }
+    }
+  }
+
   const switcher = document.getElementById("project-switcher");
   switcher.innerHTML =
     `<option value="">${T.allProjectsLabel.en} / ${T.allProjectsLabel.th} / ${T.allProjectsLabel.zh}</option>` +
@@ -167,6 +189,26 @@ async function refreshProjects() {
     .join("");
 
   renderProjectManageList();
+  updateOtherAppLink();
+}
+
+// อัปเดต href ของปุ่ม "🔗 Repair Report App" ให้พาไปที่โปรเจกต์เดียวกันที่กำลังดูอยู่ตอนนี้เสมอ
+// (แปลง id ที่ใช้เก็บในระบบนี้ กลับเป็น "ชื่อโปรเจกต์" ก่อนส่งไป เพราะ repair-app ใช้ชื่อเป็นตัวอ้างอิง)
+function updateOtherAppLink() {
+  const btn = document.getElementById("link-other-app-btn");
+  if (!btn) return;
+  try {
+    const url = new URL(OTHER_APP_URL);
+    const project = allProjects.find((p) => p.id === selectedProjectScope);
+    if (project) {
+      url.searchParams.set("project", project.label);
+    } else {
+      url.searchParams.delete("project");
+    }
+    btn.href = url.toString();
+  } catch (e) {
+    // OTHER_APP_URL ยังไม่ได้ตั้งค่า/รูปแบบไม่ถูกต้อง — ปล่อยลิงก์ไว้เฉยๆ ไม่ต้อง throw
+  }
 }
 
 function renderProjectManageList() {

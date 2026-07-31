@@ -92,3 +92,9 @@ export const CONTRACTOR_JOB_STATUS_STYLE = {
   [CONTRACTOR_JOB_STATUS.REJECTED]: { bg: "#fee2e2", text: "#991b1b", dot: "#ef4444" },
   [CONTRACTOR_JOB_STATUS.DONE]: { bg: "#dbeafe", text: "#1e40af", dot: "#3b82f6" },
 };
+
+// ============================================================
+//  ลิงก์ไปยังระบบ repair-app (ปุ่ม "🔗" ในหน้าแอดมิน เชื่อมต่อ 2 ระบบเข้าด้วยกัน)
+//  ⚠️ ตรวจสอบว่า URL นี้ตรงกับเว็บ repair-app ที่ deploy จริงของคุณ — ถ้าไม่ตรง แก้ไขที่นี่ที่เดียว
+// ============================================================
+export const OTHER_APP_URL = "https://swatcharothaii-cloud.github.io/repair-app/admin.html";

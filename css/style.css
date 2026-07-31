@@ -299,6 +299,7 @@ textarea { resize: vertical; min-height: 90px; }
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
+  text-decoration: none; /* กัน <a class="btn"> ไม่ให้มีขีดเส้นใต้แบบลิงก์ทั่วไป */
   transition: transform .1s ease, box-shadow .15s ease, opacity .15s ease;
 }
 .btn:active { transform: scale(0.98); }
@@ -321,6 +322,11 @@ textarea { resize: vertical; min-height: 90px; }
   border: 1.5px solid var(--border);
   color: var(--text);
 }
+/* ตัวเลือกด้วย element+class เพื่อชนะสไตล์ค่าเริ่มต้นของเบราว์เซอร์สำหรับ <a> (สีลิงก์/ขีดเส้นใต้) ที่ specificity เท่ากัน */
+a.btn-primary { color: #fff; }
+a.btn-secondary { color: var(--primary); }
+a.btn-outline { color: var(--text); }
+a.btn-danger { color: var(--danger); }
 
 .btn-danger { background: #fee2e2; color: var(--danger); }
 .btn-sm { padding: 8px 14px; font-size: 13px; }
