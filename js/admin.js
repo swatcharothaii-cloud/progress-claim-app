@@ -15,6 +15,7 @@ import {
   deleteLegacyPo,
   updateLegacyPoContractorName,
   bulkUpdateLegacyPoContractorNameByNickname,
+  updateLegacyPoDeliveryPhotos,
 } from "./legacy-po.js";
 import { compressImageToDataUrl } from "./image-compress.js";
 
@@ -701,12 +702,18 @@ function renderLegacyPoTable() {
       <td>${escapeHtml(p.vendorName || "")}</td>
       <td>฿${formatMoney(p.totalAmount)}</td>
       <td><span class="cat-badge" style="background:#f1f5f9; color:#334155;">${escapeHtml(p.status || "")}</span></td>
-      <td><button class="btn btn-outline btn-sm legacy-po-view-btn" data-id="${p.id}" title="View / ดู / 查看">👁️</button></td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-outline btn-sm legacy-po-view-btn" data-id="${p.id}" title="View / ดู / 查看">👁️</button>
+        <button class="btn btn-outline btn-sm legacy-po-delivery-btn" data-id="${p.id}" title="Delivery note / ใบส่งมอบงาน / 交付单">📦${(p.deliveryPhotos || []).length ? ` ${p.deliveryPhotos.length}` : ""}</button>
+      </td>
     </tr>`
     )
     .join("");
   tbody.querySelectorAll(".legacy-po-view-btn").forEach((btn) => {
     btn.addEventListener("click", () => openLegacyPoView(btn.dataset.id));
+  });
+  tbody.querySelectorAll(".legacy-po-delivery-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openLegacyPoDeliveryModal(btn.dataset.id));
   });
 }
 
@@ -860,6 +867,232 @@ document.getElementById("legacy-po-delete-btn").addEventListener("click", async 
     console.error(err);
     showToast(T.msgSavedFail.th);
   }
+});
+
+// ============================================================
+//  LEGACY PO DELIVERY NOTE — ใบส่งมอบงานแยกของแต่ละ PO เก่าจาก PEAK
+//  แต่ละภาพมีคำอธิบาย/% ความคืบหน้า/สถานะผ่าน-ไม่ผ่าน แยกกันเป็นรายภาพ (ไม่ใช่สถานะรวมทั้งใบ)
+// ============================================================
+let legacyDeliveryEditingId = null;
+let legacyDeliveryPhotos = []; // [{ url, description, percent, passed: "passed"|"failed"|"" }]
+
+function openLegacyPoDeliveryModal(id) {
+  const p = allLegacyPOs.find((x) => x.id === id);
+  if (!p) return;
+  legacyDeliveryEditingId = id;
+  legacyDeliveryPhotos = (p.deliveryPhotos || []).map((ph) => ({ ...ph }));
+  document.getElementById("legacy-po-delivery-title").textContent =
+    `Delivery Note / ใบส่งมอบงาน — ${p.poNumber || ""} (${p.contractorNickname || ""})`;
+  document.getElementById("legacy-po-delivery-images").value = "";
+  renderLegacyDeliveryPhotoList();
+  document.getElementById("legacy-po-delivery-modal").style.display = "flex";
+}
+
+function closeLegacyPoDeliveryModal() {
+  document.getElementById("legacy-po-delivery-modal").style.display = "none";
+  legacyDeliveryEditingId = null;
+  legacyDeliveryPhotos = [];
+}
+
+function renderLegacyDeliveryPhotoList() {
+  const wrap = document.getElementById("legacy-po-delivery-photo-list");
+  if (!legacyDeliveryPhotos.length) {
+    wrap.innerHTML = `<div class="hint" style="padding:10px 0;">No photos yet — add some above / ยังไม่มีรูปภาพ เพิ่มได้จากด้านบน / 暂无照片，请在上方添加</div>`;
+    return;
+  }
+  wrap.innerHTML = legacyDeliveryPhotos
+    .map(
+      (ph, i) => `
+    <div class="legacy-delivery-photo-item" data-idx="${i}">
+      <img src="${ph.url}" class="ldp-thumb" data-idx="${i}">
+      <div class="legacy-delivery-photo-fields">
+        <textarea class="ldp-desc" data-idx="${i}" rows="2" placeholder="คำอธิบายภาพ / Photo description / 图片说明">${escapeHtml(ph.description || "")}</textarea>
+        <div class="legacy-delivery-photo-row">
+          <label class="hint" style="margin:0;">% งาน / Progress</label>
+          <input type="number" class="ldp-percent" data-idx="${i}" min="0" max="100" value="${ph.percent ?? ""}" style="width:80px;">
+          <label class="hint" style="margin:0;">สถานะ / Status</label>
+          <select class="ldp-status" data-idx="${i}">
+            <option value="" ${!ph.passed ? "selected" : ""}>⏳ ยังไม่ตรวจ / Not inspected</option>
+            <option value="passed" ${ph.passed === "passed" ? "selected" : ""}>✅ ผ่าน / Passed</option>
+            <option value="failed" ${ph.passed === "failed" ? "selected" : ""}>❌ ไม่ผ่าน / Failed</option>
+          </select>
+          <button type="button" class="btn btn-sm ldp-remove" data-idx="${i}" style="margin-left:auto; background:#fee2e2; color:#991b1b;">🗑️</button>
+        </div>
+      </div>
+    </div>`
+    )
+    .join("");
+
+  wrap.querySelectorAll(".ldp-thumb").forEach((img) => {
+    img.addEventListener("click", () => openLightbox(legacyDeliveryPhotos, Number(img.dataset.idx)));
+  });
+  wrap.querySelectorAll(".ldp-desc").forEach((el) => {
+    el.addEventListener("input", () => {
+      legacyDeliveryPhotos[Number(el.dataset.idx)].description = el.value;
+    });
+  });
+  wrap.querySelectorAll(".ldp-percent").forEach((el) => {
+    el.addEventListener("input", () => {
+      legacyDeliveryPhotos[Number(el.dataset.idx)].percent = el.value === "" ? "" : Number(el.value);
+    });
+  });
+  wrap.querySelectorAll(".ldp-status").forEach((el) => {
+    el.addEventListener("change", () => {
+      legacyDeliveryPhotos[Number(el.dataset.idx)].passed = el.value;
+    });
+  });
+  wrap.querySelectorAll(".ldp-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      legacyDeliveryPhotos.splice(Number(btn.dataset.idx), 1);
+      renderLegacyDeliveryPhotoList();
+    });
+  });
+}
+
+async function handleLegacyDeliveryImageSelect(e) {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  if (legacyDeliveryPhotos.length + files.length > MAX_IMAGES) {
+    showToast(`Max ${MAX_IMAGES} images / สูงสุด ${MAX_IMAGES} รูป / 最多 ${MAX_IMAGES} 张`);
+  }
+  const room = Math.max(0, MAX_IMAGES - legacyDeliveryPhotos.length);
+  for (const file of files.slice(0, room)) {
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) continue;
+    try {
+      const url = await compressImageToDataUrl(file);
+      legacyDeliveryPhotos.push({ url, description: "", percent: "", passed: "" });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  renderLegacyDeliveryPhotoList();
+  e.target.value = "";
+}
+
+// บันทึกใบส่งมอบงาน (ภาพ+คำอธิบาย+%+สถานะ ของแต่ละภาพ) กลับเข้า Firestore — ใช้ร่วมกันทั้งปุ่ม "Save" และ "Save & print"
+async function saveLegacyDeliveryPhotos() {
+  if (!legacyDeliveryEditingId) return false;
+  try {
+    await updateLegacyPoDeliveryPhotos(legacyDeliveryEditingId, legacyDeliveryPhotos, currentAdmin?.name);
+    return true;
+  } catch (err) {
+    console.error(err);
+    showToast(T.msgSavedFail.th);
+    return false;
+  }
+}
+
+// สร้างเอกสาร HTML สำหรับพิมพ์ใบส่งมอบงานของ PO เก่ารายการนี้ — แต่ละภาพโชว์คำอธิบาย/% งาน/สถานะผ่าน-ไม่ผ่านแยกกัน
+function buildLegacyPoDeliveryNoteHtml(p, photos) {
+  const dash = `<span class="dn-empty-note">-</span>`;
+  const val = (v) => (v === null || v === undefined || v === "" ? dash : escapeHtml(String(v)));
+  const row2 = (labelA, valueA, labelB, valueB) => `
+    <tr>
+      <td class="dn-label">${labelA}</td>
+      <td class="dn-value">${valueA}</td>
+      <td class="dn-label-2">${labelB}</td>
+      <td class="dn-value">${valueB}</td>
+    </tr>`;
+
+  const statusHtml = (passed) =>
+    passed === "passed"
+      ? `<span class="dn-photo-status-passed">✅ Passed / ผ่าน</span>`
+      : passed === "failed"
+      ? `<span class="dn-photo-status-failed">❌ Failed / ไม่ผ่าน</span>`
+      : `<span class="dn-photo-status-pending">⏳ Not inspected / ยังไม่ตรวจ</span>`;
+
+  const photosSection = (photos || []).length
+    ? `<div class="dn-section-title">📷 Delivery photos / ภาพส่งมอบงาน (${photos.length})</div>
+       <div class="dn-photos-wrap">
+         <div class="dn-photos-grid">
+           ${photos
+             .map(
+               (ph, i) => `
+             <div class="dn-photo-card">
+               <img class="print-thumb" src="${ph.url}">
+               <div class="dn-photo-caption"><b>#${i + 1}</b> ${val(ph.description)}</div>
+               <div class="dn-photo-caption"><span class="dn-photo-percent">${ph.percent !== "" && ph.percent != null ? `${escapeHtml(String(ph.percent))}%` : dash}</span></div>
+               <div class="dn-photo-caption">${statusHtml(ph.passed)}</div>
+             </div>`
+             )
+             .join("")}
+         </div>
+       </div>`
+    : `<div class="dn-section-title">📷 Delivery photos / ภาพส่งมอบงาน</div><div style="padding:14px;" class="hint">No photos / ยังไม่มีรูปภาพ</div>`;
+
+  return `
+    <div class="print-report-header">
+      ${COMPANY?.logo ? `<img src="${COMPANY.logo}">` : ""}
+      <div class="titles">
+        <h1>${escapeHtml(COMPANY?.nameTh || "")}</h1>
+        <div class="sub">${escapeHtml(COMPANY?.nameEn || "")}</div>
+      </div>
+    </div>
+
+    <div class="dn-doc">
+      <div class="dn-doc-title-bar">
+        <div class="dn-doc-title">
+          Delivery Note / ใบส่งมอบงาน
+          <span class="sub">${escapeHtml(p.contractorNickname || "")} — ${escapeHtml(p.vendorName || "")}</span>
+        </div>
+        <div class="dn-doc-no">
+          PO No. / เลขที่ PO
+          <b>${escapeHtml(p.poNumber || "-")}</b>
+        </div>
+      </div>
+
+      <div class="dn-section-title">🗂️ PO Information / ข้อมูล PO</div>
+      <table class="dn-table">
+        ${row2("Issue date<br>วันที่ออก", formatDateThai(p.issueDate), "Project<br>โปรเจกต์", val(p.project))}
+        ${row2("Total<br>มูลค่ารวม", `<b>฿${p.totalAmount != null ? Number(p.totalAmount).toLocaleString("th-TH") : "-"}</b>`, "Status<br>สถานะ", val(p.status))}
+      </table>
+
+      ${photosSection}
+
+      <div class="dn-sign-grid">
+        <div class="dn-sign-block">
+          <div class="dn-sign-line">&nbsp;</div>
+          <div class="dn-sign-role">ผู้ส่งมอบงาน / Delivered by</div>
+        </div>
+        <div class="dn-sign-block">
+          <div class="dn-sign-line">&nbsp;</div>
+          <div class="dn-sign-role">ผู้ตรวจรับงาน / Inspected by</div>
+        </div>
+        <div class="dn-sign-block">
+          <div class="dn-sign-line">&nbsp;</div>
+          <div class="dn-sign-role">ผู้อนุมัติ / Approved by</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+document.getElementById("close-legacy-po-delivery-modal").addEventListener("click", closeLegacyPoDeliveryModal);
+document.getElementById("cancel-legacy-po-delivery-btn").addEventListener("click", closeLegacyPoDeliveryModal);
+document.getElementById("legacy-po-delivery-images").addEventListener("change", handleLegacyDeliveryImageSelect);
+document.getElementById("save-legacy-po-delivery-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("save-legacy-po-delivery-btn");
+  btn.disabled = true;
+  const ok = await saveLegacyDeliveryPhotos();
+  btn.disabled = false;
+  if (ok) {
+    showToast(T.msgSaved.th);
+    closeLegacyPoDeliveryModal();
+  }
+});
+document.getElementById("legacy-po-delivery-print-btn").addEventListener("click", async () => {
+  if (!legacyDeliveryEditingId) return;
+  const btn = document.getElementById("legacy-po-delivery-print-btn");
+  btn.disabled = true;
+  const ok = await saveLegacyDeliveryPhotos();
+  btn.disabled = false;
+  if (!ok) return;
+  const p = allLegacyPOs.find((x) => x.id === legacyDeliveryEditingId);
+  if (!p) return;
+  document.getElementById("print-report").innerHTML = buildLegacyPoDeliveryNoteHtml(p, legacyDeliveryPhotos);
+  setPrintPage("portrait", 10); // ใบส่งมอบงาน = เอกสารเดี่ยว พิมพ์แนวตั้ง A4
+  showToast(T.pdfPrintHint.th);
+  setTimeout(() => window.print(), 300);
 });
 
 // ลบรายการเบิกงวดงานถาวร (ตามคำขอ) — เตือนก่อนกดลบจริงเสมอ กู้คืนไม่ได้หลังลบแล้ว

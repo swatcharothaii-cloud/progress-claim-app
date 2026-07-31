@@ -663,6 +663,26 @@ tbody tr:hover { background: var(--primary-light); }
 .dn-table td.dn-label-2 { width: 160px; color: #475569; font-weight: 600; background: #f8fafc; white-space: nowrap; border-left: 1px solid #e2e8f0; }
 .dn-photos-wrap { padding: 14px; }
 .dn-photos-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* การ์ดภาพต่อภาพในเอกสารพิมพ์ใบส่งมอบงาน (PO เก่าจาก PEAK) — โชว์คำอธิบาย/% งาน/สถานะผ่าน-ไม่ผ่าน ใต้รูปแยกเป็นรายภาพ */
+.dn-photo-card { display: flex; flex-direction: column; gap: 6px; width: 160px; }
+.dn-photo-card img.print-thumb { width: 160px; height: 160px; }
+.dn-photo-caption { font-size: 12px; color: #334155; line-height: 1.4; word-break: break-word; }
+.dn-photo-percent { font-weight: 700; color: #0f172a; }
+.dn-photo-status-passed { color: #065f46; font-weight: 700; }
+.dn-photo-status-failed { color: #991b1b; font-weight: 700; }
+.dn-photo-status-pending { color: #94a3b8; }
+
+/* รายการแก้ไขภาพในหน้าจอ (ก่อนพิมพ์) ของใบส่งมอบงาน PO เก่า — แต่ละภาพแก้คำอธิบาย/% งาน/สถานะแยกกันได้ */
+.legacy-delivery-photo-item {
+  display: flex; gap: 12px; border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px; margin-bottom: 10px; background: #fff;
+}
+.legacy-delivery-photo-item img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; flex-shrink: 0; cursor: zoom-in; }
+.legacy-delivery-photo-fields { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.legacy-delivery-photo-fields textarea { width: 100%; resize: vertical; }
+.legacy-delivery-photo-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.legacy-delivery-photo-row select, .legacy-delivery-photo-row input[type="number"] { width: auto; }
 .dn-sign-grid {
   display: flex; justify-content: space-between; gap: 18px; padding: 26px 18px 18px;
 }

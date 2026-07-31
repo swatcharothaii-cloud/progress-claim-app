@@ -299,6 +299,27 @@
   </div>
 </div>
 
+<!-- ============ LEGACY PO DELIVERY NOTE MODAL ============ -->
+<div class="modal-overlay" id="legacy-po-delivery-modal" style="display:none;">
+  <div class="modal-sheet" style="max-width:760px;">
+    <div class="modal-header">
+      <h3 id="legacy-po-delivery-title">Delivery Note / ใบส่งมอบงาน / 交付单</h3>
+      <button class="icon-btn" id="close-legacy-po-delivery-modal">✕</button>
+    </div>
+    <p class="hint">Upload photos, then set a description, progress %, and pass/fail status for each photo individually / อัปโหลดรูปภาพ แล้วใส่คำอธิบาย % ความคืบหน้า และสถานะผ่าน/ไม่ผ่านของแต่ละภาพแยกกัน / 上传照片后，可分别为每张照片填写说明、进度百分比与验收状态</p>
+    <div class="field">
+      <label>Add photos / เพิ่มรูปภาพ / 添加照片</label>
+      <input type="file" id="legacy-po-delivery-images" accept="image/*" multiple>
+    </div>
+    <div id="legacy-po-delivery-photo-list"></div>
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;">
+      <button class="btn btn-outline" id="legacy-po-delivery-print-btn">🖨️ Save &amp; print / บันทึกแล้วพิมพ์ / 保存并打印</button>
+      <button class="btn btn-outline" id="cancel-legacy-po-delivery-btn">Close / ปิด / 关闭</button>
+      <button class="btn btn-primary" id="save-legacy-po-delivery-btn">💾 Save / บันทึก / 保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ IMAGE LIGHTBOX ============ -->
 <div class="lightbox-overlay" id="lightbox-modal" style="display:none;">
   <button class="lightbox-close" id="lightbox-close">✕</button>

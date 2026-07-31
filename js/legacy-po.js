@@ -127,3 +127,13 @@ export async function bulkUpdateLegacyPoContractorNameByNickname(oldNickname, ne
 export async function deleteLegacyPo(id) {
   await deleteDoc(doc(db, LEGACY_PO_COLLECTION, id));
 }
+
+// บันทึกใบส่งมอบงาน (ภาพถ่าย) ของ PO เก่ารายการนี้โดยเฉพาะ — แต่ละภาพมีคำอธิบาย, % ความคืบหน้า,
+// และสถานะผ่าน/ไม่ผ่านแยกกันเป็นรายภาพ (ไม่ใช่สถานะรวมทั้งใบเหมือนงานผู้รับเหมาปกติ)
+export async function updateLegacyPoDeliveryPhotos(id, photos, updatedBy) {
+  await updateDoc(doc(db, LEGACY_PO_COLLECTION, id), {
+    deliveryPhotos: photos || [],
+    deliveryNoteUpdatedAt: serverTimestamp(),
+    deliveryNoteUpdatedBy: updatedBy || "",
+  });
+}
