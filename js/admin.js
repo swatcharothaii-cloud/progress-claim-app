@@ -880,7 +880,9 @@ function openClaimModal(claim) {
   document.getElementById("c-date").value = claim ? claim.claimDate : todayStr();
   document.getElementById("c-status").value = claim ? claim.status : CLAIM_STATUS.PENDING;
   document.getElementById("c-notes").value = claim ? claim.notes || "" : "";
-  refreshSourceJobOptions(claim ? claim.sourceJobId || "" : "");
+  // claim เก่าก่อนรองรับ PEAK (ไม่มีฟิลด์ sourceType) แต่มี sourceJobId แล้ว ให้ถือว่าอ้างอิงจาก "งานผู้รับเหมา" ตามเดิม
+  const openSourceType = claim ? claim.sourceType || (claim.sourceJobId ? "job" : "") : "";
+  refreshSourceJobOptions(openSourceType, claim ? claim.sourceJobId || "" : "");
   document.getElementById("c-po-number").value = claim ? claim.poNumber || "" : "";
   document.getElementById("c-job-no").value = claim ? claim.sourceJobNo || "" : "";
   sourceJobPoAmount = claim && claim.poAmount != null ? Number(claim.poAmount) : null;
@@ -914,44 +916,93 @@ function jobsWithPO() {
   return allContractorJobs.filter((j) => (j.poNumber || "").trim());
 }
 
-function refreshSourceJobOptions(selectedJobId) {
-  const sel = document.getElementById("c-source-job");
-  const jobs = jobsWithPO();
-  sel.innerHTML =
-    `<option value="">— No reference / ไม่อ้างอิง / 不关联 —</option>` +
-    jobs
-      .map(
-        (j) =>
-          `<option value="${j.id}">🧾 ${escapeHtml(j.poNumber)} · 📦 ${escapeHtml(j.jobId || "")} · ${escapeHtml(j.project || "")} — ${escapeHtml((j.description || "").slice(0, 40))}</option>`
-      )
-      .join("");
-  sel.value = selectedJobId && jobs.some((j) => j.id === selectedJobId) ? selectedJobId : "";
+// รายการ PO เก่าที่นำเข้าจาก PEAK ทั้งหมด (allLegacyPOs — subscribe ไว้ตั้งแต่ main() เช่นกัน)
+// ทุกรายการมีเลขที่ PO อยู่แล้วตั้งแต่ตอนนำเข้า จึงไม่ต้อง filter เพิ่ม
+function legacyPOsList() {
+  return allLegacyPOs;
 }
 
-// เลือกงานจาก dropdown แล้วดึงเลขที่ PO / เลขที่ใบส่งมอบงานมาเติมอัตโนมัติ พร้อมช่วยเติมโปรเจกต์ให้ตรงกัน
-// และเติม "รายการงาน" ให้ถ้ายังไม่ได้พิมพ์อะไรไว้ (ไม่ทับของที่ผู้ใช้พิมพ์เองแล้ว)
+// dropdown เลือกอ้างอิง รองรับ 2 แหล่ง: งานผู้รับเหมาในระบบ (job:<id>) และ PO เก่าจาก PEAK (legacy:<id>)
+// ใช้ prefix แยกแหล่งข้อมูลเพราะ id ของทั้งสอง collection ไม่เกี่ยวข้องกัน อาจซ้ำกันได้โดยบังเอิญ
+function refreshSourceJobOptions(selectedType, selectedId) {
+  const sel = document.getElementById("c-source-job");
+  const jobs = jobsWithPO();
+  const legacy = legacyPOsList();
+  let html = `<option value="">— No reference / ไม่อ้างอิง / 不关联 —</option>`;
+  if (jobs.length) {
+    html +=
+      `<optgroup label="📦 จากงานผู้รับเหมาในระบบ / From contractor job / 来自承包商工作">` +
+      jobs
+        .map(
+          (j) =>
+            `<option value="job:${j.id}">🧾 ${escapeHtml(j.poNumber)} · 📦 ${escapeHtml(j.jobId || "")} · ${escapeHtml(j.project || "")} — ${escapeHtml((j.description || "").slice(0, 40))}</option>`
+        )
+        .join("") +
+      `</optgroup>`;
+  }
+  if (legacy.length) {
+    html +=
+      `<optgroup label="🗂️ จาก PEAK (คลังใบสั่งซื้อเก่า) / From PEAK import / 来自PEAK导入">` +
+      legacy
+        .map(
+          (p) =>
+            `<option value="legacy:${p.id}">🧾 ${escapeHtml(p.poNumber)} · 👷 ${escapeHtml(p.contractorNickname || "")} · ${escapeHtml(p.project || "")} — ฿${formatMoney(p.totalAmount ?? p.netPayable ?? 0)}</option>`
+        )
+        .join("") +
+      `</optgroup>`;
+  }
+  sel.innerHTML = html;
+  const wantValue = selectedType && selectedId ? `${selectedType}:${selectedId}` : "";
+  sel.value = Array.from(sel.options).some((o) => o.value === wantValue) ? wantValue : "";
+}
+
+// เติมโปรเจกต์ในฟอร์มให้ตรงกับงาน/PO ที่เลือกอ้างอิง (ถ้าโปรเจกต์นั้นมีอยู่ใน dropdown ของฟอร์ม)
+function applyProjectAutoFill(projectId) {
+  const projectSel = document.getElementById("c-project");
+  if (projectId && Array.from(projectSel.options).some((o) => o.value === projectId)) {
+    projectSel.value = projectId;
+  }
+}
+
+// เลือกรายการจาก dropdown แล้วดึงเลขที่ PO / เลขที่ใบส่งมอบงาน / ยอดเงินมาเติมอัตโนมัติ พร้อมช่วยเติมโปรเจกต์ให้ตรงกัน
+// และเติม "รายการงาน" ให้ถ้ายังไม่ได้พิมพ์อะไรไว้ (ไม่ทับของที่ผู้ใช้พิมพ์เองแล้ว) — รองรับทั้งงานผู้รับเหมาในระบบและ PO เก่าจาก PEAK
 function applySourceJobSelection() {
-  const jobId = document.getElementById("c-source-job").value;
-  if (!jobId) {
+  const raw = document.getElementById("c-source-job").value;
+  if (!raw) {
     document.getElementById("c-po-number").value = "";
     document.getElementById("c-job-no").value = "";
     document.getElementById("c-po-amount").value = "";
     sourceJobPoAmount = null;
     return;
   }
-  const job = allContractorJobs.find((j) => j.id === jobId);
-  if (!job) return;
-  document.getElementById("c-po-number").value = job.poNumber || "";
-  document.getElementById("c-job-no").value = job.jobId || "";
-  const projectSel = document.getElementById("c-project");
-  if (job.projectId && Array.from(projectSel.options).some((o) => o.value === job.projectId)) {
-    projectSel.value = job.projectId;
+  const sepIdx = raw.indexOf(":");
+  const type = raw.slice(0, sepIdx);
+  const id = raw.slice(sepIdx + 1);
+
+  if (type === "job") {
+    const job = allContractorJobs.find((j) => j.id === id);
+    if (!job) return;
+    document.getElementById("c-po-number").value = job.poNumber || "";
+    document.getElementById("c-job-no").value = job.jobId || "";
+    applyProjectAutoFill(job.projectId);
+    const workItemEl = document.getElementById("c-workItem");
+    if (!workItemEl.value.trim() && job.description) {
+      workItemEl.value = job.description;
+    }
+    sourceJobPoAmount = jobFullAmount(job);
+  } else if (type === "legacy") {
+    const po = allLegacyPOs.find((p) => p.id === id);
+    if (!po) return;
+    document.getElementById("c-po-number").value = po.poNumber || "";
+    document.getElementById("c-job-no").value = ""; // PO เก่าจาก PEAK ไม่มีเลขที่ใบส่งมอบงานในระบบนี้
+    applyProjectAutoFill(po.projectId);
+    const workItemEl = document.getElementById("c-workItem");
+    if (!workItemEl.value.trim() && po.contractorNickname) {
+      workItemEl.value = `งานผู้รับเหมา: ${po.contractorNickname}`;
+    }
+    sourceJobPoAmount = po.totalAmount != null ? Number(po.totalAmount) : po.netPayable != null ? Number(po.netPayable) : null;
   }
-  const workItemEl = document.getElementById("c-workItem");
-  if (!workItemEl.value.trim() && job.description) {
-    workItemEl.value = job.description;
-  }
-  sourceJobPoAmount = jobFullAmount(job);
+
   document.getElementById("c-po-amount").value = sourceJobPoAmount != null ? `฿${formatMoney(sourceJobPoAmount)}` : "— ไม่มีข้อมูลราคาในงานนี้ / No price on this job —";
   recalcClaimAmount();
 }
@@ -1011,7 +1062,10 @@ async function saveClaim() {
   const claimDate = document.getElementById("c-date").value;
   const status = document.getElementById("c-status").value;
   const notes = document.getElementById("c-notes").value.trim();
-  const sourceJobId = document.getElementById("c-source-job").value;
+  const rawSource = document.getElementById("c-source-job").value;
+  const sourceSepIdx = rawSource.indexOf(":");
+  const sourceType = sourceSepIdx > -1 ? rawSource.slice(0, sourceSepIdx) : ""; // "job" | "legacy" | ""
+  const sourceJobId = sourceSepIdx > -1 ? rawSource.slice(sourceSepIdx + 1) : "";
   const poNumber = document.getElementById("c-po-number").value.trim();
   const sourceJobNo = document.getElementById("c-job-no").value.trim();
 
@@ -1027,6 +1081,7 @@ async function saveClaim() {
     poNumber,
     sourceJobId,
     sourceJobNo,
+    sourceType,
     poAmount: sourceJobPoAmount,
     progressPercent: Number(progressPercent),
     claimAmount: Number(claimAmount),
