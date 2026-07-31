@@ -8,7 +8,14 @@ import { T, claimStatusTri, jobTypeTri, contractorJobStatusTri } from "./i18n.js
 import { loadProjects, addProject, updateProject } from "./projects.js";
 import { addClaim, updateClaim, watchAllClaims, deleteClaim } from "./claims.js";
 import { watchAllContractorJobs, setPoNumber, passDeliveryInspection, failDeliveryInspection } from "./contractor-jobs.js";
-import { importLegacyPurchaseOrders, watchAllLegacyPOs, reassignLegacyPoProject, deleteLegacyPo } from "./legacy-po.js";
+import {
+  importLegacyPurchaseOrders,
+  watchAllLegacyPOs,
+  reassignLegacyPoProject,
+  deleteLegacyPo,
+  updateLegacyPoContractorName,
+  bulkUpdateLegacyPoContractorNameByNickname,
+} from "./legacy-po.js";
 import { compressImageToDataUrl } from "./image-compress.js";
 
 renderCompanyBrandBar("brand-bar", COMPANY);
@@ -778,6 +785,22 @@ function openLegacyPoView(id) {
   const select = document.getElementById("legacy-po-reassign-select");
   select.innerHTML = allProjects.map((proj) => `<option value="${proj.id}">${escapeHtml(proj.label)}</option>`).join("");
   select.value = p.projectId || "";
+
+  // เติมช่องแก้ไขชื่อผู้รับเหมา — และถ้ามีรายการอื่นที่ชื่อเล่นเดียวกันอยู่ ให้โชว์ตัวเลือก "แก้ไขทั้งหมดด้วย"
+  document.getElementById("legacy-po-edit-nickname").value = p.contractorNickname || "";
+  document.getElementById("legacy-po-edit-vendorname").value = p.vendorName || "";
+  const applyAllWrap = document.getElementById("legacy-po-edit-applyall-wrap");
+  const applyAllCheckbox = document.getElementById("legacy-po-edit-applyall");
+  applyAllCheckbox.checked = false;
+  const sameNicknameCount = allLegacyPOs.filter((x) => (x.contractorNickname || "") === (p.contractorNickname || "")).length;
+  if (p.contractorNickname && sameNicknameCount > 1) {
+    document.getElementById("legacy-po-edit-applyall-label").textContent =
+      `Apply to all ${sameNicknameCount} POs with nickname "${p.contractorNickname}" too / แก้ไขให้ทุกใบสั่งซื้อ (${sameNicknameCount} รายการ) ที่มีชื่อเล่น "${p.contractorNickname}" ด้วย / 同时应用于所有相同昵称的${sameNicknameCount}张采购单`;
+    applyAllWrap.style.display = "flex";
+  } else {
+    applyAllWrap.style.display = "none";
+  }
+
   document.getElementById("legacy-po-view-modal").style.display = "flex";
 }
 function closeLegacyPoView() {
@@ -796,6 +819,32 @@ document.getElementById("legacy-po-reassign-select").addEventListener("change", 
   } catch (err) {
     console.error(err);
     showToast(T.msgSavedFail.th);
+  }
+});
+document.getElementById("legacy-po-save-name-btn").addEventListener("click", async () => {
+  if (!legacyPoViewingId) return;
+  const p = allLegacyPOs.find((x) => x.id === legacyPoViewingId);
+  if (!p) return;
+  const newNickname = document.getElementById("legacy-po-edit-nickname").value.trim();
+  const newVendorName = document.getElementById("legacy-po-edit-vendorname").value.trim();
+  const applyAll = document.getElementById("legacy-po-edit-applyall").checked;
+  const btn = document.getElementById("legacy-po-save-name-btn");
+  btn.disabled = true;
+  try {
+    if (applyAll) {
+      // ใช้ชื่อเล่น "เดิม" (จาก p ที่โหลดไว้ตอนเปิด modal นี้) เป็นตัวจับคู่รายการอื่น ไม่ใช่ค่าที่เพิ่งพิมพ์ใหม่
+      const count = await bulkUpdateLegacyPoContractorNameByNickname(p.contractorNickname || "", newNickname, newVendorName);
+      showToast(`${T.msgSaved.th} (${count} รายการ / ${count} records)`);
+    } else {
+      await updateLegacyPoContractorName(legacyPoViewingId, newNickname, newVendorName);
+      showToast(T.msgSaved.th);
+    }
+    closeLegacyPoView();
+  } catch (err) {
+    console.error(err);
+    showToast(T.msgSavedFail.th);
+  } finally {
+    btn.disabled = false;
   }
 });
 document.getElementById("legacy-po-delete-btn").addEventListener("click", async () => {

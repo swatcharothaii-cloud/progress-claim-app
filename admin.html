@@ -266,6 +266,26 @@
       <button class="icon-btn" id="close-legacy-po-view-modal">✕</button>
     </div>
     <div id="legacy-po-view-body"></div>
+
+    <div class="field" style="background:#f8fafc; border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-top:14px;">
+      <label>✏️ Edit contractor name / แก้ไขชื่อผู้รับเหมา / 编辑承包商姓名</label>
+      <div style="display:flex; gap:12px; margin-top:8px;">
+        <div class="field" style="flex:1; margin-bottom:0;">
+          <label>Nickname / ชื่อเล่น / 昵称</label>
+          <input type="text" id="legacy-po-edit-nickname">
+        </div>
+        <div class="field" style="flex:1; margin-bottom:0;">
+          <label>Full name with title / ชื่อ-นามสกุลจริง พร้อมคำนำหน้า (นาย/นางสาว) / 全名（含称谓）</label>
+          <input type="text" id="legacy-po-edit-vendorname">
+        </div>
+      </div>
+      <label class="hint" id="legacy-po-edit-applyall-wrap" style="display:flex; align-items:center; gap:6px; margin-top:10px; cursor:pointer;">
+        <input type="checkbox" id="legacy-po-edit-applyall" style="width:auto;">
+        <span id="legacy-po-edit-applyall-label">Apply to all POs with this nickname too / แก้ไขให้ทุกใบสั่งซื้อที่มีชื่อเล่นนี้ด้วย / 同时应用于所有相同昵称的采购单</span>
+      </label>
+      <button type="button" class="btn btn-primary btn-sm" id="legacy-po-save-name-btn" style="margin-top:10px;">💾 Save name / บันทึกชื่อ / 保存姓名</button>
+    </div>
+
     <div style="display:flex; align-items:center; gap:10px; justify-content:space-between; margin-top:16px; flex-wrap:wrap;">
       <div style="display:flex; align-items:center; gap:8px;">
         <label class="hint" style="margin:0;">Reassign project / ย้ายไปโปรเจกต์อื่น / 重新分配项目</label>

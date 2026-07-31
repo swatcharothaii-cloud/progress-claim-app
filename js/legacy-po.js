@@ -98,6 +98,32 @@ export async function reassignLegacyPoProject(id, projectId, projectLabel) {
   });
 }
 
+// แก้ไขชื่อเล่น/ชื่อ-นามสกุลจริงของผู้รับเหมา เฉพาะรายการเดียว (ไม่กระทบรายการอื่นที่ชื่อเล่นเดียวกัน)
+// ใช้แก้ข้อมูลที่นำเข้าจาก PEAK มาผิด เช่น คำนำหน้า นาย/นางสาว ไม่ตรงกับตัวจริง
+export async function updateLegacyPoContractorName(id, contractorNickname, vendorName) {
+  await updateDoc(doc(db, LEGACY_PO_COLLECTION, id), {
+    contractorNickname: contractorNickname || "",
+    vendorName: vendorName || "",
+  });
+}
+
+// แก้ไขชื่อเล่น/ชื่อ-นามสกุลจริง ให้ทุกใบสั่งซื้อที่มี "ชื่อเล่นเดิม" (oldNickname) ตรงกันในคราวเดียว
+// ใช้แก้ปัญหาข้อมูลนำเข้าจาก PEAK ที่ชื่อเล่นเดียวกันแต่ชื่อ-นามสกุลจริง/คำนำหน้าไม่ตรงกันปนกันอยู่หลายบิล
+// คืนค่าจำนวนรายการที่แก้ไขไปทั้งหมด
+export async function bulkUpdateLegacyPoContractorNameByNickname(oldNickname, newNickname, newVendorName) {
+  const snap = await getDocs(collection(db, LEGACY_PO_COLLECTION));
+  const matches = snap.docs.filter((d) => (d.data().contractorNickname || "") === (oldNickname || ""));
+  let count = 0;
+  for (const d of matches) {
+    await updateDoc(doc(db, LEGACY_PO_COLLECTION, d.id), {
+      contractorNickname: newNickname || "",
+      vendorName: newVendorName || "",
+    });
+    count++;
+  }
+  return count;
+}
+
 export async function deleteLegacyPo(id) {
   await deleteDoc(doc(db, LEGACY_PO_COLLECTION, id));
 }
