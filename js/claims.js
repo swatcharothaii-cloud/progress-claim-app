@@ -26,6 +26,11 @@ export async function addClaim(data) {
     projectId: data.projectId || "",
     project: data.project || "",
     workItem: data.workItem || "",
+    // อ้างอิงย้อนกลับไปยังงานผู้รับเหมา/ใบส่งมอบงานใน collection "contractorJobs" (ถ้าเลือกไว้ตอนสร้างรายการเบิกงวด)
+    // เก็บเป็นค่าคงที่ ณ ตอนเลือก ไม่ได้ผูกแบบ live-lookup เพื่อให้ประวัติการเบิกยังถูกต้องแม้ PO จะถูกแก้ไขภายหลัง
+    poNumber: data.poNumber || "",
+    sourceJobId: data.sourceJobId || "",
+    sourceJobNo: data.sourceJobNo || "",
     progressPercent: Number(data.progressPercent) || 0,
     claimAmount: Number(data.claimAmount) || 0,
     images: data.images || [],

@@ -142,6 +142,7 @@ async function main() {
   document.getElementById("close-claim-modal").addEventListener("click", closeClaimModal);
   document.getElementById("cancel-claim-btn").addEventListener("click", closeClaimModal);
   document.getElementById("save-claim-btn").addEventListener("click", saveClaim);
+  document.getElementById("c-source-job").addEventListener("change", applySourceJobSelection);
   document.getElementById("c-images").addEventListener("change", handleImageSelect);
 
   document.getElementById("project-add-form").addEventListener("submit", async (e) => {
@@ -311,6 +312,11 @@ function renderTable(list) {
         <td>${escapeHtml(c.claimId || "")}</td>
         <td>${escapeHtml(c.project || "")}</td>
         <td>${escapeHtml(c.workItem || "")}</td>
+        <td>${
+          c.poNumber || c.sourceJobNo
+            ? `${c.poNumber ? `🧾 ${escapeHtml(c.poNumber)}` : ""}${c.poNumber && c.sourceJobNo ? "<br>" : ""}${c.sourceJobNo ? `📦 ${escapeHtml(c.sourceJobNo)}` : ""}`
+            : `<span class="hint">-</span>`
+        }</td>
         <td>${c.progressPercent ?? 0}%</td>
         <td>฿${formatMoney(c.claimAmount)}</td>
         <td>${formatDateThai(c.claimDate)}</td>
@@ -870,10 +876,57 @@ function openClaimModal(claim) {
   document.getElementById("c-date").value = claim ? claim.claimDate : todayStr();
   document.getElementById("c-status").value = claim ? claim.status : CLAIM_STATUS.PENDING;
   document.getElementById("c-notes").value = claim ? claim.notes || "" : "";
+  refreshSourceJobOptions(claim ? claim.sourceJobId || "" : "");
+  document.getElementById("c-po-number").value = claim ? claim.poNumber || "" : "";
+  document.getElementById("c-job-no").value = claim ? claim.sourceJobNo || "" : "";
   editingImages = claim ? [...(claim.images || [])] : [];
   renderImagePreviews();
   document.getElementById("claim-modal").style.display = "flex";
 }
+
+// รายชื่องานผู้รับเหมาที่ "มีเลขที่ PO แล้ว" เท่านั้น — ใช้เป็นตัวเลือกให้ผูกรายการเบิกงวดกับ PO/ใบส่งมอบงาน
+// (ข้อมูลชุดเดียวกับที่ repair-app สร้างไว้ อ่านแบบเรียลไทม์ผ่าน allContractorJobs ที่ subscribe ไว้ตั้งแต่ main())
+function jobsWithPO() {
+  return allContractorJobs.filter((j) => (j.poNumber || "").trim());
+}
+
+function refreshSourceJobOptions(selectedJobId) {
+  const sel = document.getElementById("c-source-job");
+  const jobs = jobsWithPO();
+  sel.innerHTML =
+    `<option value="">— No reference / ไม่อ้างอิง / 不关联 —</option>` +
+    jobs
+      .map(
+        (j) =>
+          `<option value="${j.id}">🧾 ${escapeHtml(j.poNumber)} · 📦 ${escapeHtml(j.jobId || "")} · ${escapeHtml(j.project || "")} — ${escapeHtml((j.description || "").slice(0, 40))}</option>`
+      )
+      .join("");
+  sel.value = selectedJobId && jobs.some((j) => j.id === selectedJobId) ? selectedJobId : "";
+}
+
+// เลือกงานจาก dropdown แล้วดึงเลขที่ PO / เลขที่ใบส่งมอบงานมาเติมอัตโนมัติ พร้อมช่วยเติมโปรเจกต์ให้ตรงกัน
+// และเติม "รายการงาน" ให้ถ้ายังไม่ได้พิมพ์อะไรไว้ (ไม่ทับของที่ผู้ใช้พิมพ์เองแล้ว)
+function applySourceJobSelection() {
+  const jobId = document.getElementById("c-source-job").value;
+  if (!jobId) {
+    document.getElementById("c-po-number").value = "";
+    document.getElementById("c-job-no").value = "";
+    return;
+  }
+  const job = allContractorJobs.find((j) => j.id === jobId);
+  if (!job) return;
+  document.getElementById("c-po-number").value = job.poNumber || "";
+  document.getElementById("c-job-no").value = job.jobId || "";
+  const projectSel = document.getElementById("c-project");
+  if (job.projectId && Array.from(projectSel.options).some((o) => o.value === job.projectId)) {
+    projectSel.value = job.projectId;
+  }
+  const workItemEl = document.getElementById("c-workItem");
+  if (!workItemEl.value.trim() && job.description) {
+    workItemEl.value = job.description;
+  }
+}
+
 function closeClaimModal() {
   document.getElementById("claim-modal").style.display = "none";
   document.getElementById("c-images").value = "";
@@ -929,6 +982,9 @@ async function saveClaim() {
   const claimDate = document.getElementById("c-date").value;
   const status = document.getElementById("c-status").value;
   const notes = document.getElementById("c-notes").value.trim();
+  const sourceJobId = document.getElementById("c-source-job").value;
+  const poNumber = document.getElementById("c-po-number").value.trim();
+  const sourceJobNo = document.getElementById("c-job-no").value.trim();
 
   if (!projectId || !workItem || progressPercent === "" || claimAmount === "" || !claimDate) {
     showToast(T.msgFillRequired.th);
@@ -939,6 +995,9 @@ async function saveClaim() {
     projectId,
     project,
     workItem,
+    poNumber,
+    sourceJobId,
+    sourceJobNo,
     progressPercent: Number(progressPercent),
     claimAmount: Number(claimAmount),
     claimDate,

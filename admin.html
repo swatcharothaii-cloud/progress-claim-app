@@ -130,6 +130,7 @@
           <th>Claim No. / เลขที่เบิก / 单号</th>
           <th>Project / โปรเจกต์ / 项目</th>
           <th>Work Item / รายการงาน / 工程项目</th>
+          <th>PO / Delivery Note / เลขที่ PO/ใบส่งมอบงาน / PO/交付单号</th>
           <th>Progress / ความคืบหน้า / 进度</th>
           <th>Amount / จำนวนเงิน / 金额</th>
           <th>Date / วันที่ / 日期</th>
@@ -153,6 +154,24 @@
 
     <input type="hidden" id="c-id">
     <div class="field"><label>Claim No. / เลขที่เบิก / 单号</label><input type="text" id="c-claimId" disabled></div>
+
+    <div class="field" style="background:#f8fafc; border:1px solid var(--border); border-radius:12px; padding:12px 14px;">
+      <label>🔗 Link to delivery note / PO (optional) / อ้างอิงใบส่งมอบงาน / PO (ถ้ามี) / 关联交付单/PO（可选）</label>
+      <select id="c-source-job">
+        <option value="">— No reference / ไม่อ้างอิง / 不关联 —</option>
+      </select>
+      <p class="hint" style="margin-top:6px;">Pick a job to auto-fill its project, PO number, and delivery note number below / เลือกงานเพื่อดึงโปรเจกต์ เลขที่ PO และเลขที่ใบส่งมอบงานมาให้อัตโนมัติ / 选择工程后自动带入项目、PO单号与交付单号</p>
+      <div style="display:flex; gap:12px; margin-top:10px;">
+        <div class="field" style="flex:1; margin-bottom:0;">
+          <label>PO Number / เลขที่ PO / PO单号</label>
+          <input type="text" id="c-po-number" disabled placeholder="-">
+        </div>
+        <div class="field" style="flex:1; margin-bottom:0;">
+          <label>Delivery Note No. / เลขที่ใบส่งมอบงาน / 交付单号</label>
+          <input type="text" id="c-job-no" disabled placeholder="-">
+        </div>
+      </div>
+    </div>
 
     <div class="field">
       <label>Project * / โปรเจกต์ * / 项目 *</label>
