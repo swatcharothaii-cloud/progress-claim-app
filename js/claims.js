@@ -31,6 +31,7 @@ export async function addClaim(data) {
     poNumber: data.poNumber || "",
     sourceJobId: data.sourceJobId || "",
     sourceJobNo: data.sourceJobNo || "",
+    poAmount: data.poAmount ?? null, // ยอดเงินเต็มตาม PO ณ ตอนที่เลือกอ้างอิง (ใช้คำนวณ % การเบิกในครั้งถัดไปที่แก้ไขรายการนี้)
     progressPercent: Number(data.progressPercent) || 0,
     claimAmount: Number(data.claimAmount) || 0,
     images: data.images || [],

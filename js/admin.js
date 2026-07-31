@@ -143,6 +143,7 @@ async function main() {
   document.getElementById("cancel-claim-btn").addEventListener("click", closeClaimModal);
   document.getElementById("save-claim-btn").addEventListener("click", saveClaim);
   document.getElementById("c-source-job").addEventListener("change", applySourceJobSelection);
+  document.getElementById("c-progress").addEventListener("input", recalcClaimAmount);
   document.getElementById("c-images").addEventListener("change", handleImageSelect);
 
   document.getElementById("project-add-form").addEventListener("submit", async (e) => {
@@ -862,6 +863,9 @@ async function setStatus(id, status) {
 //  ADD / EDIT MODAL
 // ============================================================
 let editingImages = [];
+// ยอดเงินเต็มตาม PO ของงานที่เลือกอ้างอิงอยู่ในฟอร์มตอนนี้ (null = ไม่ได้อ้างอิง PO ใดๆ หรืองานนั้นยังไม่มีราคา)
+// ใช้คำนวณ "ยอดเบิก" อัตโนมัติ = ยอดเงิน PO × % ความคืบหน้า ทุกครั้งที่แก้ % หรือเลือก PO ใหม่
+let sourceJobPoAmount = null;
 
 function openClaimModal(claim) {
   document.getElementById("claim-modal-title").textContent = claim
@@ -879,9 +883,29 @@ function openClaimModal(claim) {
   refreshSourceJobOptions(claim ? claim.sourceJobId || "" : "");
   document.getElementById("c-po-number").value = claim ? claim.poNumber || "" : "";
   document.getElementById("c-job-no").value = claim ? claim.sourceJobNo || "" : "";
+  sourceJobPoAmount = claim && claim.poAmount != null ? Number(claim.poAmount) : null;
+  document.getElementById("c-po-amount").value = sourceJobPoAmount != null ? `฿${formatMoney(sourceJobPoAmount)}` : "";
   editingImages = claim ? [...(claim.images || [])] : [];
   renderImagePreviews();
   document.getElementById("claim-modal").style.display = "flex";
+}
+
+// ยอดเงินเต็มของงาน — งานประเภท "เสนอราคา" ใช้ quotePrice, "งานแก้ไข" ใช้ repairPrice, ประเภทอื่น (เช่นงานแก้ตำหนิ) ไม่มีราคา
+function jobFullAmount(job) {
+  if (!job) return null;
+  if (job.type === CONTRACTOR_JOB_TYPE.QUOTE && job.quotePrice != null) return Number(job.quotePrice);
+  if (job.type === CONTRACTOR_JOB_TYPE.FIX && job.repairPrice != null) return Number(job.repairPrice);
+  return null;
+}
+
+// คำนวณ "ยอดเบิก" ใหม่ = ยอดเงิน PO เต็ม × (% ความคืบหน้า / 100) — ทำงานเฉพาะตอนมี PO อ้างอิงอยู่เท่านั้น
+// (ถ้าไม่ได้อ้างอิง PO ใดๆ ช่องยอดเบิกยังกรอกเองได้ตามปกติ ไม่ถูกคำนวณทับ)
+function recalcClaimAmount() {
+  if (sourceJobPoAmount == null) return;
+  const progress = Number(document.getElementById("c-progress").value);
+  if (!Number.isFinite(progress)) return;
+  const amount = Math.round(sourceJobPoAmount * (progress / 100) * 100) / 100;
+  document.getElementById("c-amount").value = amount;
 }
 
 // รายชื่องานผู้รับเหมาที่ "มีเลขที่ PO แล้ว" เท่านั้น — ใช้เป็นตัวเลือกให้ผูกรายการเบิกงวดกับ PO/ใบส่งมอบงาน
@@ -911,6 +935,8 @@ function applySourceJobSelection() {
   if (!jobId) {
     document.getElementById("c-po-number").value = "";
     document.getElementById("c-job-no").value = "";
+    document.getElementById("c-po-amount").value = "";
+    sourceJobPoAmount = null;
     return;
   }
   const job = allContractorJobs.find((j) => j.id === jobId);
@@ -925,6 +951,9 @@ function applySourceJobSelection() {
   if (!workItemEl.value.trim() && job.description) {
     workItemEl.value = job.description;
   }
+  sourceJobPoAmount = jobFullAmount(job);
+  document.getElementById("c-po-amount").value = sourceJobPoAmount != null ? `฿${formatMoney(sourceJobPoAmount)}` : "— ไม่มีข้อมูลราคาในงานนี้ / No price on this job —";
+  recalcClaimAmount();
 }
 
 function closeClaimModal() {
@@ -998,6 +1027,7 @@ async function saveClaim() {
     poNumber,
     sourceJobId,
     sourceJobNo,
+    poAmount: sourceJobPoAmount,
     progressPercent: Number(progressPercent),
     claimAmount: Number(claimAmount),
     claimDate,
