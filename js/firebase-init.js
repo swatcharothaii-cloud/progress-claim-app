@@ -47,3 +47,5 @@ export const PROJECTS_COLLECTION = "projects";
 export const CONTRACTOR_JOBS_COLLECTION = "contractorJobs";
 // คลังใบสั่งซื้อเก่าที่นำเข้าจากโปรแกรมบัญชี PEAK (progress-claim-app เท่านั้นที่ใช้ collection นี้)
 export const LEGACY_PO_COLLECTION = "legacyPurchaseOrders";
+// รายชื่อแอดมิน — collection เดียวกับ repair-app (Firestore ตัวเดียวกัน) ใช้ร่วมกันทั้งสองระบบ
+export const ADMINS_COLLECTION = "admins";

@@ -22,7 +22,7 @@ export async function addProject({ label, color }) {
   if (!trimmedLabel) throw new Error("กรุณาระบุชื่อโปรเจกต์");
   const ref = await addDoc(collection(db, PROJECTS_COLLECTION), {
     label: trimmedLabel,
-    color: color || "#2563eb",
+    color: color || "#4f46e5",
     order: 999,
     active: true,
     createdAt: serverTimestamp(),

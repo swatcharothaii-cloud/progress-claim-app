@@ -54,12 +54,27 @@
         </div>
         <div class="field" style="flex:0 0 80px; margin-bottom:0;">
           <label>Color / สี / 颜色</label>
-          <input type="color" id="proj-color" value="#2563eb" style="padding:2px; height:38px; width:100%;">
+          <input type="color" id="proj-color" value="#4f46e5" style="padding:2px; height:38px; width:100%;">
         </div>
         <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
       </form>
       <div id="project-manage-list"></div>
       <p class="hint" style="margin-top:12px;">รายชื่อโปรเจกต์ใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบ</p>
+    </div>
+  </details>
+
+  <details class="chart-card" id="admin-manager">
+    <summary style="cursor:pointer; font-weight:600; font-size:15px;">🧑‍💼 Manage Admins / จัดการรายชื่อแอดมิน / 管理管理员名单</summary>
+    <div style="margin-top:16px;">
+      <form id="admin-add-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+          <label>Admin Name * / ชื่อแอดมิน * / 管理员姓名 *</label>
+          <input type="text" id="admin-name" placeholder="e.g. K.Nueng / เช่น คุณหนึ่ง" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
+      </form>
+      <div id="admin-manage-list"></div>
+      <p class="hint" style="margin-top:12px;">รายชื่อแอดมินใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบทันที การปิดใช้งานจะซ่อนจากหน้าเลือกชื่อ แต่ชื่อยังอยู่ในรายการเก่าที่เคยแก้ไขไว้เหมือนเดิม</p>
     </div>
   </details>
 
@@ -153,7 +168,11 @@
     </div>
 
     <input type="hidden" id="c-id">
-    <div class="field"><label>Claim No. / เลขที่เบิก / 单号</label><input type="text" id="c-claimId" disabled></div>
+    <div class="field">
+      <label>Claim No. / เลขที่เบิก / 单号</label>
+      <input type="text" id="c-claimId">
+      <p class="hint" id="c-claimId-hint" style="margin-top:4px; display:none;">Auto-generated when a new claim is created — assign a number after saving if you need to correct it / เลขที่นี้จะถูกสร้างให้อัตโนมัติตอนบันทึกรายการใหม่ — แก้ไขเลขได้หลังบันทึกแล้วถ้าต้องการแก้ / 新增时自动生成编号——保存后如需更正可再修改</p>
+    </div>
 
     <div class="field">
       <label>Project * / โปรเจกต์ * / 项目 *</label>
@@ -166,20 +185,20 @@
       <select id="c-source-job">
         <option value="">— No reference / ไม่อ้างอิง / 不关联 —</option>
       </select>
-      <p class="hint" style="margin-top:6px;">Pick a contractor job or a PEAK-imported PO (from the selected project) to auto-fill its PO number and amount below / เลือกได้ทั้งงานผู้รับเหมาในระบบ หรือ PO เก่าที่นำเข้าจาก PEAK (เฉพาะของโปรเจกต์ที่เลือกไว้) เพื่อดึงเลขที่ PO และยอดเงินมาให้อัตโนมัติ / 可选择系统内的承包商工作，或从PEAK导入的旧PO（仅限所选项目），自动带入PO单号与金额</p>
+      <p class="hint" style="margin-top:6px;">Pick a contractor job or a PEAK-imported PO (from the selected project) to auto-fill its PO number and amount below — or type them in yourself for an out-of-system PO / เลือกได้ทั้งงานผู้รับเหมาในระบบ หรือ PO เก่าที่นำเข้าจาก PEAK (เฉพาะของโปรเจกต์ที่เลือกไว้) เพื่อดึงเลขที่ PO และยอดเงินมาให้อัตโนมัติ — หรือพิมพ์กรอกเองได้ถ้าเป็น PO นอกระบบ / 可选择系统内的承包商工作，或从PEAK导入的旧PO（仅限所选项目），自动带入PO单号与金额——如为系统外PO，也可自行输入</p>
       <div style="display:flex; gap:12px; margin-top:10px;">
         <div class="field" style="flex:1; margin-bottom:0;">
           <label>PO Number / เลขที่ PO / PO单号</label>
-          <input type="text" id="c-po-number" disabled placeholder="-">
+          <input type="text" id="c-po-number" placeholder="-">
         </div>
         <div class="field" style="flex:1; margin-bottom:0;">
           <label>Delivery Note No. / เลขที่ใบส่งมอบงาน / 交付单号</label>
-          <input type="text" id="c-job-no" disabled placeholder="-">
+          <input type="text" id="c-job-no" placeholder="-">
         </div>
       </div>
       <div class="field" style="margin-top:10px; margin-bottom:0;" id="c-po-amount-wrap">
         <label>PO Amount (total) / ยอดเงินตาม PO (เต็มจำนวน) / PO总金额</label>
-        <input type="text" id="c-po-amount" disabled placeholder="-">
+        <input type="number" id="c-po-amount" min="0" step="0.01" placeholder="-">
         <p class="hint" style="margin-top:4px;">Claim amount below is auto-calculated as PO amount × progress % — you can still edit it manually / ยอดเบิกด้านล่างคำนวณอัตโนมัติจาก ยอดเงิน PO × % ความคืบหน้า — แก้ไขเองภายหลังได้ / 下方申请金额自动按PO金额×进度%计算，仍可手动修改</p>
       </div>
     </div>

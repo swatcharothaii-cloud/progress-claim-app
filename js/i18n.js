@@ -36,6 +36,8 @@ export const T = {
   msgFillRequired: tri("Please fill in all required fields", "กรุณากรอกข้อมูลที่จำเป็นให้ครบ", "请填写所有必填项"),
   msgConnectFailCheckInternet: tri("Connection failed, please check your internet", "เชื่อมต่อไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต", "连接失败，请检查网络"),
   loginPromptName: tri("Please select your name to continue", "กรุณาเลือกชื่อของคุณเพื่อใช้งาน", "请选择您的姓名以继续"),
+  msgAdminLoadFail: tri("Unable to load the admin list. Please refresh this page", "โหลดรายชื่อแอดมินไม่สำเร็จ กรุณารีเฟรชหน้านี้", "无法加载管理员名单，请刷新此页面"),
+  msgAdminNameRequired: tri("Please enter an admin name", "กรุณากรอกชื่อแอดมิน", "请输入管理员姓名"),
   logoutBtn: tri("Switch user", "เปลี่ยนผู้ใช้งาน", "切换用户"),
   pdfReportTitle: tri("Progress Claim Report", "รายงานเบิกงวดงาน", "工程款申请报告"),
   pdfGeneratedAtPrefix: tri("Generated at", "สร้างรายงานเมื่อ", "生成时间"),

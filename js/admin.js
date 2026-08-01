@@ -1,9 +1,10 @@
 import {
-  ADMINS, COMPANY, CLAIM_STATUS, MAX_IMAGES, MAX_IMAGE_MB,
+  COMPANY, CLAIM_STATUS, MAX_IMAGES, MAX_IMAGE_MB,
   CONTRACTOR_JOB_TYPE, CONTRACTOR_JOB_TYPE_STYLE, CONTRACTOR_JOB_STATUS, CONTRACTOR_JOB_STATUS_STYLE,
   OTHER_APP_URL,
 } from "./config.js";
 import { renderCompanyBrandBar, showToast, formatDateThai, formatMoney, escapeHtml, todayStr } from "./utils.js";
+import { loadAdmins, addAdmin, updateAdmin } from "./admins.js";
 import { T, claimStatusTri, jobTypeTri, contractorJobStatusTri } from "./i18n.js";
 import { loadProjects, addProject, updateProject } from "./projects.js";
 import { addClaim, resubmitClaim, watchAllClaims, deleteClaim, approveClaimStep, rejectClaimStep } from "./claims.js";
@@ -23,12 +24,15 @@ renderCompanyBrandBar("brand-bar", COMPANY);
 
 // ============================================================
 //  ระบุตัวตนด้วยการ "เลือกชื่อ" — เหมือน repair-app (ไม่ใช่ระบบล็อกอินจริง)
+//  รายชื่อแอดมิน (admins) โหลดจาก Firestore ผ่าน js/admins.js — ใช้ collection เดียวกับ repair-app
+//  (เพิ่ม/แก้ไข/ปิดใช้งานได้เองจากหัวข้อ "จัดการรายชื่อแอดมิน" ในแดชบอร์ด มีผลกับทั้งสองระบบทันที)
 // ============================================================
 const IDENTITY_KEY = "progressClaimAdminIdentity";
+let admins = [];
 function getIdentity() {
   try {
     const parsed = JSON.parse(localStorage.getItem(IDENTITY_KEY) || "null");
-    if (parsed && ADMINS.some((a) => a.id === parsed.id)) return parsed;
+    if (parsed && admins.some((a) => a.id === parsed.id)) return parsed;
   } catch {}
   return null;
 }
@@ -44,25 +48,28 @@ const dashboard = document.getElementById("dashboard");
 const idGrid = document.getElementById("admin-id-grid");
 const whoamiEl = document.getElementById("admin-whoami");
 
-idGrid.innerHTML = ADMINS.map(
-  (a) => `<button type="button" class="admin-chip" data-id="${a.id}"><span class="id-num">${escapeHtml(a.id)}</span>${escapeHtml(a.name)}</button>`
-).join("");
-idGrid.querySelectorAll(".admin-chip").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const found = ADMINS.find((a) => a.id === btn.dataset.id);
-    if (found) {
-      setIdentity(found);
-      showDashboard();
-    }
+function renderIdGrid() {
+  const activeAdmins = admins.filter((a) => a.active !== false);
+  idGrid.innerHTML = activeAdmins.map(
+    (a) => `<button type="button" class="admin-chip" data-id="${a.id}"><span class="id-num">${escapeHtml(a.id)}</span>${escapeHtml(a.name)}</button>`
+  ).join("");
+  idGrid.querySelectorAll(".admin-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const found = admins.find((a) => a.id === btn.dataset.id);
+      if (found) {
+        setIdentity(found);
+        showDashboard();
+      }
+    });
   });
-});
+}
 document.getElementById("switch-user-btn").addEventListener("click", () => {
   clearIdentity();
   identityScreen.style.display = "flex";
   dashboard.style.display = "none";
 });
 
-let currentAdmin = getIdentity();
+let currentAdmin = null;
 function showDashboard() {
   currentAdmin = getIdentity();
   identityScreen.style.display = "none";
@@ -85,14 +92,25 @@ let unsubContractorJobs = null;
 let unsubLegacyPOs = null;
 let mainStarted = false;
 
-// เรียก showDashboard()/main() ตรงนี้ (หลังประกาศตัวแปร state ทั้งหมดข้างบนแล้ว) — ถ้าเรียกตอนที่ยังไม่ถึง
-// บรรทัดประกาศ "let mainStarted" ฯลฯ ด้านบน จะเจอ ReferenceError "Cannot access ... before initialization"
-// เพราะ main() อ้างถึงตัวแปรเหล่านี้ทันทีที่ถูกเรียก (เคสนี้เกิดขึ้นทุกครั้งที่แอดมินเคยเลือกชื่อไว้แล้วเปิดหน้าใหม่)
-if (currentAdmin) {
-  showDashboard();
-} else {
-  identityScreen.style.display = "flex";
-}
+// โหลดรายชื่อแอดมินจาก Firestore ก่อน แล้วค่อยตัดสินใจว่าจะโชว์แดชบอร์ดเลย (ถ้าเคยเลือกชื่อไว้แล้ว) หรือ
+// โชว์หน้าเลือกชื่อ — ต้องรอโหลดเสร็จก่อนเพราะต้องเอารายชื่อจริงมาตรวจสอบ identity ที่จำไว้ใน localStorage
+// (เรียกหลังประกาศตัวแปร state ทั้งหมดข้างบนแล้ว เหตุผลเดียวกับที่เคยเป็นคอมเมนต์ตรงนี้เดิม)
+(async function initIdentity() {
+  try {
+    admins = await loadAdmins();
+  } catch (e) {
+    console.warn("โหลดรายชื่อแอดมินไม่สำเร็จ", e);
+    showToast(T.msgAdminLoadFail.th, 4000);
+  }
+  renderIdGrid();
+  const stored = getIdentity();
+  if (stored) {
+    currentAdmin = stored;
+    showDashboard();
+  } else {
+    identityScreen.style.display = "flex";
+  }
+})();
 
 async function main() {
   if (mainStarted) return;
@@ -149,6 +167,8 @@ async function main() {
   document.getElementById("save-claim-btn").addEventListener("click", saveClaim);
   document.getElementById("c-source-job").addEventListener("change", applySourceJobSelection);
   document.getElementById("c-progress").addEventListener("input", recalcClaimAmount);
+  // ตอนนี้ยอดเงิน PO แก้ไขเองได้แล้ว (ไม่ใช่แค่ดึงอัตโนมัติจากรายการที่อ้างอิง) — พิมพ์แก้เองก็คำนวณยอดเบิกใหม่ให้ทันที
+  document.getElementById("c-po-amount").addEventListener("input", recalcClaimAmount);
   // เปลี่ยนโปรเจกต์ในฟอร์ม → รายการ PO/ใบส่งมอบงานด้านล่างต้องกรองใหม่ตามโปรเจกต์นั้น และเคลียร์การอ้างอิง PO เดิมทิ้ง
   // (เพราะ PO เดิมอาจไม่ได้อยู่ในโปรเจกต์ใหม่ที่เพิ่งเลือก)
   document.getElementById("c-project").addEventListener("change", (e) => {
@@ -170,6 +190,32 @@ async function main() {
     await refreshProjects();
     showToast(T.msgSaved.th);
   });
+
+  document.getElementById("admin-add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const nameInput = document.getElementById("admin-name");
+    const name = nameInput.value.trim();
+    if (!name) {
+      showToast(T.msgAdminNameRequired.th);
+      return;
+    }
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    try {
+      const newId = await addAdmin({ name }, admins);
+      admins.push({ id: newId, name, active: true, order: parseInt(newId, 10) });
+      renderAdminManageList();
+      renderIdGrid();
+      nameInput.value = "";
+      showToast(T.msgSaved.th);
+    } catch (err) {
+      console.error(err);
+      showToast(T.msgSavedFail.th);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+  renderAdminManageList();
 
   document.getElementById("export-excel-btn").addEventListener("click", exportExcel);
   document.getElementById("export-pdf-btn").addEventListener("click", exportPdf);
@@ -232,20 +278,102 @@ function renderProjectManageList() {
   el.innerHTML = allProjects
     .map(
       (p) => `
-    <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border);">
-      <span style="width:12px; height:12px; border-radius:50%; background:${p.color || "#2563eb"}; flex-shrink:0;"></span>
-      <span style="flex:1;">${escapeHtml(p.label)}</span>
+    <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border);" data-proj-id="${p.id}">
+      <input type="color" class="proj-color-input" value="${p.color || "#4f46e5"}" data-field="color" style="width:34px; height:30px; padding:2px; flex-shrink:0;">
+      <input type="text" class="proj-label-input" value="${escapeHtml(p.label)}" data-field="label" style="flex:1; min-width:120px; padding:6px 8px; border:1px solid var(--border); border-radius:8px;">
+      <button class="btn btn-outline btn-sm save-proj-btn" data-id="${p.id}">Save / บันทึก / 保存</button>
       <button class="btn btn-outline btn-sm toggle-proj-btn" data-id="${p.id}" data-active="${p.active !== false}">
         ${p.active === false ? "Enable / เปิดใช้งาน" : "Disable / ปิดใช้งาน"}
       </button>
     </div>`
     )
     .join("");
+  el.querySelectorAll(".save-proj-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const row = el.querySelector(`[data-proj-id="${btn.dataset.id}"]`);
+      const label = row.querySelector('[data-field="label"]').value.trim();
+      const color = row.querySelector('[data-field="color"]').value;
+      if (!label) {
+        showToast(T.msgFillRequired.th);
+        return;
+      }
+      try {
+        await updateProject(btn.dataset.id, { label, color });
+        await refreshProjects();
+        showToast(T.msgSaved.th);
+      } catch (e) {
+        console.error(e);
+        showToast(T.msgSavedFail.th);
+      }
+    });
+  });
   el.querySelectorAll(".toggle-proj-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const active = btn.dataset.active === "true";
       await updateProject(btn.dataset.id, { active: !active });
       await refreshProjects();
+    });
+  });
+}
+
+function renderAdminManageList() {
+  const el = document.getElementById("admin-manage-list");
+  if (!el) return;
+  const sorted = [...admins].sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || (a.name || "").localeCompare(b.name || "", "th"));
+  el.innerHTML = sorted
+    .map(
+      (a) => `
+    <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border);" data-admin-id="${a.id}">
+      <span class="id-num" style="flex:0 0 auto;">${escapeHtml(a.id)}</span>
+      <input type="text" class="admin-name-input" value="${escapeHtml(a.name || "")}" data-field="name" style="flex:1; min-width:120px; padding:6px 8px; border:1px solid var(--border); border-radius:8px;">
+      ${a.active === false ? `<span class="badge" style="background:#fee2e2; color:#991b1b;">Disabled / ปิดใช้งานอยู่ / 已停用</span>` : ""}
+      <button class="btn btn-outline btn-sm save-admin-btn" data-id="${a.id}">Save / บันทึก / 保存</button>
+      <button class="btn ${a.active === false ? "btn-secondary" : "btn-outline"} btn-sm toggle-admin-btn" data-id="${a.id}" data-active="${a.active !== false}">
+        ${a.active === false ? "Enable / เปิดใช้งาน" : "Disable / ปิดใช้งาน"}
+      </button>
+    </div>`
+    )
+    .join("");
+  el.querySelectorAll(".save-admin-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const row = el.querySelector(`[data-admin-id="${btn.dataset.id}"]`);
+      const name = row.querySelector('[data-field="name"]').value.trim();
+      if (!name) {
+        showToast(T.msgAdminNameRequired.th);
+        return;
+      }
+      try {
+        await updateAdmin(btn.dataset.id, { name });
+        const a = admins.find((x) => x.id === btn.dataset.id);
+        if (a) a.name = name;
+        renderAdminManageList();
+        renderIdGrid();
+        if (currentAdmin && currentAdmin.id === btn.dataset.id) {
+          currentAdmin = { ...currentAdmin, name };
+          setIdentity(currentAdmin);
+          whoamiEl.textContent = `👤 ${currentAdmin.name}`;
+        }
+        showToast(T.msgSaved.th);
+      } catch (e) {
+        console.error(e);
+        showToast(T.msgSavedFail.th);
+      }
+    });
+  });
+  el.querySelectorAll(".toggle-admin-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const active = btn.dataset.active === "true";
+      try {
+        await updateAdmin(btn.dataset.id, { active: !active });
+        const a = admins.find((x) => x.id === btn.dataset.id);
+        if (a) a.active = !active;
+        renderAdminManageList();
+        renderIdGrid();
+        showToast(T.msgSaved.th);
+      } catch (e) {
+        console.error(e);
+        showToast(T.msgSavedFail.th);
+      }
     });
   });
 }
@@ -291,7 +419,7 @@ function renderStats(list) {
   const approved = list.filter((c) => c.status === CLAIM_STATUS.APPROVED).reduce((s, c) => s + (Number(c.claimAmount) || 0), 0);
   const pending = list.filter((c) => c.status === CLAIM_STATUS.PENDING).length;
   document.getElementById("stat-grid").innerHTML = `
-    <div class="stat-card" style="--stat-color:#2563eb;"><div class="stat-icon">💰</div><div class="stat-body"><div class="num" style="color:#2563eb;">฿${formatMoney(total)}</div><div class="lbl">${T.totalClaimedLabel.th}</div></div></div>
+    <div class="stat-card" style="--stat-color:#4f46e5;"><div class="stat-icon">💰</div><div class="stat-body"><div class="num" style="color:#4f46e5;">฿${formatMoney(total)}</div><div class="lbl">${T.totalClaimedLabel.th}</div></div></div>
     <div class="stat-card" style="--stat-color:#10b981;"><div class="stat-icon">✅</div><div class="stat-body"><div class="num" style="color:#10b981;">฿${formatMoney(approved)}</div><div class="lbl">${T.totalApprovedLabel.th}</div></div></div>
     <div class="stat-card" style="--stat-color:#f59e0b;"><div class="stat-icon">⏳</div><div class="stat-body"><div class="num" style="color:#f59e0b;">${pending}</div><div class="lbl">${T.totalPendingLabel.th}</div></div></div>
   `;
@@ -946,7 +1074,12 @@ function openClaimModal(claim) {
     ? `Edit Progress Claim / แก้ไขรายการเบิกงวดงาน / 编辑申请 (#${claim.claimId})`
     : `Add Progress Claim / เพิ่มรายการเบิกงวดงาน / 新增申请`;
   document.getElementById("c-id").value = claim ? claim.id : "";
-  document.getElementById("c-claimId").value = claim ? claim.claimId : "(auto)";
+  const claimIdInput = document.getElementById("c-claimId");
+  claimIdInput.value = claim ? claim.claimId : "(auto)";
+  // เลขที่เบิกสร้างอัตโนมัติตอนสร้างรายการใหม่เท่านั้น (ยังไม่มีให้แก้ตอนนั้น) แต่แก้ไขเองได้ภายหลังจากรายการที่มีอยู่แล้ว
+  claimIdInput.disabled = !claim;
+  const claimIdHint = document.getElementById("c-claimId-hint");
+  if (claimIdHint) claimIdHint.style.display = claim ? "none" : "block";
   const openProjectId = claim ? claim.projectId : allProjects.find((p) => p.active !== false)?.id || "";
   document.getElementById("c-project").value = openProjectId;
   document.getElementById("c-workItem").value = claim ? claim.workItem : "";
@@ -973,7 +1106,7 @@ function openClaimModal(claim) {
   document.getElementById("c-po-number").value = claim ? claim.poNumber || "" : "";
   document.getElementById("c-job-no").value = claim ? claim.sourceJobNo || "" : "";
   sourceJobPoAmount = claim && claim.poAmount != null ? Number(claim.poAmount) : null;
-  document.getElementById("c-po-amount").value = sourceJobPoAmount != null ? `฿${formatMoney(sourceJobPoAmount)}` : "";
+  document.getElementById("c-po-amount").value = sourceJobPoAmount != null ? sourceJobPoAmount : "";
   editingImages = claim ? [...(claim.images || [])] : [];
   renderImagePreviews();
   document.getElementById("claim-modal").style.display = "flex";
@@ -987,13 +1120,23 @@ function jobFullAmount(job) {
   return null;
 }
 
-// คำนวณ "ยอดเบิก" ใหม่ = ยอดเงิน PO เต็ม × (% ความคืบหน้า / 100) — ทำงานเฉพาะตอนมี PO อ้างอิงอยู่เท่านั้น
-// (ถ้าไม่ได้อ้างอิง PO ใดๆ ช่องยอดเบิกยังกรอกเองได้ตามปกติ ไม่ถูกคำนวณทับ)
+// อ่านยอดเงิน PO ปัจจุบันจากช่องกรอกโดยตรง (ตอนนี้แก้ไขเองได้แล้ว ไม่ได้ล็อกตามที่เลือกจาก dropdown
+// เพียงอย่างเดียวอีกต่อไป) — ตัดสัญลักษณ์ ฿ / คอมมา ออกก่อนแปลงเป็นตัวเลข
+function getPoAmountFromField() {
+  const raw = document.getElementById("c-po-amount").value;
+  if (raw === "" || raw == null) return null;
+  const num = parseFloat(String(raw).replace(/[^\d.]/g, ""));
+  return Number.isFinite(num) ? num : null;
+}
+
+// คำนวณ "ยอดเบิก" ใหม่ = ยอดเงิน PO เต็ม (จากช่องกรอก ไม่ว่าจะดึงอัตโนมัติหรือพิมพ์เอง) × (% ความคืบหน้า / 100)
+// — ทำงานเฉพาะตอนมียอดเงิน PO อยู่ในช่องเท่านั้น (ถ้าว่างไว้ ช่องยอดเบิกยังกรอกเองได้ตามปกติ ไม่ถูกคำนวณทับ)
 function recalcClaimAmount() {
-  if (sourceJobPoAmount == null) return;
+  const poAmt = getPoAmountFromField();
+  if (poAmt == null) return;
   const progress = Number(document.getElementById("c-progress").value);
   if (!Number.isFinite(progress)) return;
-  const amount = Math.round(sourceJobPoAmount * (progress / 100) * 100) / 100;
+  const amount = Math.round(poAmt * (progress / 100) * 100) / 100;
   document.getElementById("c-amount").value = amount;
 }
 
@@ -1088,7 +1231,7 @@ function applySourceJobSelection() {
     sourceJobPoAmount = po.totalAmount != null ? Number(po.totalAmount) : po.netPayable != null ? Number(po.netPayable) : null;
   }
 
-  document.getElementById("c-po-amount").value = sourceJobPoAmount != null ? `฿${formatMoney(sourceJobPoAmount)}` : "— ไม่มีข้อมูลราคาในงานนี้ / No price on this job —";
+  document.getElementById("c-po-amount").value = sourceJobPoAmount != null ? sourceJobPoAmount : "";
   recalcClaimAmount();
 }
 
@@ -1152,6 +1295,7 @@ async function saveClaim() {
   const sourceJobId = sourceSepIdx > -1 ? rawSource.slice(sourceSepIdx + 1) : "";
   const poNumber = document.getElementById("c-po-number").value.trim();
   const sourceJobNo = document.getElementById("c-job-no").value.trim();
+  const poAmount = getPoAmountFromField();
 
   if (!projectId || !workItem || progressPercent === "" || claimAmount === "" || !claimDate) {
     showToast(T.msgFillRequired.th);
@@ -1166,13 +1310,29 @@ async function saveClaim() {
     sourceJobId,
     sourceJobNo,
     sourceType,
-    poAmount: sourceJobPoAmount,
+    poAmount,
     progressPercent: Number(progressPercent),
     claimAmount: Number(claimAmount),
     claimDate,
     notes,
     images: editingImages,
   };
+
+  // เลขที่เบิก (claimId) แก้ไขเองได้แล้ว (เฉพาะรายการที่มีอยู่แล้ว) — เช็คซ้ำกับรายการอื่นก่อนบันทึกกันสับสน/หาไม่เจอ
+  if (id) {
+    const claimId = document.getElementById("c-claimId").value.trim();
+    if (!claimId) {
+      showToast("Please enter a Claim No. / กรุณากรอกเลขที่เบิก / 请输入单号");
+      return;
+    }
+    const dup = allClaims.find((c) => c.id !== id && (c.claimId || "").trim() === claimId);
+    if (dup) {
+      if (!confirm(`Claim No. "${claimId}" is already used by another record — save anyway? / เลขที่เบิก "${claimId}" ถูกใช้กับรายการอื่นอยู่แล้ว ยืนยันบันทึกทับหรือไม่?`)) {
+        return;
+      }
+    }
+    payload.claimId = claimId;
+  }
 
   try {
     if (id) {
