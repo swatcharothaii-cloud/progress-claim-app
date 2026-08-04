@@ -9,19 +9,26 @@ import { createFreshApproval, approveApprovalStep, rejectApprovalStep } from "./
 
 const IMPORT_DATA_URL = "./data/legacy-po-import-2026.json";
 
-// นำเข้าข้อมูลจากไฟล์ JSON ที่แปลงมาจาก Excel — ทำได้หลายครั้งอย่างปลอดภัย (ข้ามรายการที่นำเข้าไปแล้ว
-// โดยเช็คคู่ เลขที่เอกสาร + ช่างประจำ ที่มีอยู่แล้วใน Firestore ก่อนสร้างใหม่)
+// นำเข้าข้อมูลจากไฟล์ JSON ที่แปลงมาจาก Excel (ครั้งแรกที่ตั้งระบบ) — ทำได้หลายครั้งอย่างปลอดภัย
+// (ข้ามรายการที่นำเข้าไปแล้ว โดยเช็คคู่ เลขที่เอกสาร + ช่างประจำ ที่มีอยู่แล้วใน Firestore ก่อนสร้างใหม่)
 // onProgress(doneCount, totalCount) เรียกเป็นระยะเพื่ออัปเดตสถานะบนหน้าจอ
 export async function importLegacyPurchaseOrders(onProgress) {
   const res = await fetch(IMPORT_DATA_URL);
   if (!res.ok) throw new Error("โหลดไฟล์ข้อมูลนำเข้าไม่สำเร็จ (" + res.status + ")");
   const records = await res.json();
+  return importLegacyPurchaseOrderRecords(records, onProgress, "peak_2026H1");
+}
 
+// เวอร์ชันทั่วไป — รับ array ของ record ตรงๆ (ใช้ทั้งกับการนำเข้าจากไฟล์ JSON ด้านบน และจากไฟล์ Excel ที่
+// แอดมินอัปโหลดเองผ่านหน้าเว็บ — ดู admin.js ส่วน "📤 Import from Excel") แต่ละ record ควรมีฟิลด์:
+// poNumber, contractorNickname, vendorName, issueDate, status, lineItems, totalAmount, vatAmount,
+// whtAmount, netPayable, notes, rawProjectText, project (ทุกฟิลด์นอกจาก poNumber/project เป็น optional)
+export async function importLegacyPurchaseOrderRecords(records, onProgress, importBatch) {
   // 1) โหลดโปรเจกต์ที่มีอยู่แล้วทั้งหมด แล้วสร้างโปรเจกต์ใหม่เฉพาะชื่อที่ยังไม่มี (ผสมเข้ากับโปรเจกต์หลัก
   //    ที่ใช้ร่วมกับ repair-app ตามที่ตกลงไว้ — ไม่สร้างซ้ำถ้ามีชื่อเดียวกันอยู่แล้ว)
   let allProjects = await loadProjects();
   const projectByLabel = new Map(allProjects.map((p) => [p.label, p]));
-  const distinctLabels = Array.from(new Set(records.map((r) => r.project)));
+  const distinctLabels = Array.from(new Set(records.map((r) => r.project).filter(Boolean)));
   for (const label of distinctLabels) {
     if (!projectByLabel.has(label)) {
       const newId = await addProject({ label, color: randomColorFor(label) });
@@ -41,7 +48,7 @@ export async function importLegacyPurchaseOrders(onProgress) {
   for (const r of records) {
     done++;
     if (onProgress) onProgress(done, records.length, { created, skipped });
-    const key = `${r.poNumber}::${r.contractorNickname}`;
+    const key = `${r.poNumber}::${r.contractorNickname || ""}`;
     if (existingKeys.has(key)) {
       skipped++;
       continue;
@@ -49,7 +56,7 @@ export async function importLegacyPurchaseOrders(onProgress) {
     const project = projectByLabel.get(r.project);
     await addDoc(collection(db, LEGACY_PO_COLLECTION), {
       poNumber: r.poNumber,
-      contractorNickname: r.contractorNickname,
+      contractorNickname: r.contractorNickname || "",
       vendorName: r.vendorName || "",
       issueDate: r.issueDate || "",
       status: r.status || "",
@@ -61,14 +68,56 @@ export async function importLegacyPurchaseOrders(onProgress) {
       notes: r.notes || "",
       rawProjectText: r.rawProjectText || "",
       projectId: project?.id || "",
-      project: r.project,
-      importBatch: "peak_2026H1",
+      project: r.project || "",
+      importBatch: importBatch || "manual",
       createdAt: serverTimestamp(),
     });
     existingKeys.add(key);
     created++;
   }
   return { total: records.length, created, skipped };
+}
+
+// เพิ่ม PO เก่าทีละใบเองจากหน้าแอดมิน (ปุ่ม "✏️ Add PO Manually") — ใช้ตอนมีแค่ใบเดียว (เช่น อ่านจาก
+// ไฟล์ PDF ที่แปลงเป็น Excel/ตัวเลขไม่ได้อัตโนมัติ) เตือน (ไม่บล็อก) ถ้าเลขที่ PO+ช่างประจำซ้ำกับที่มีอยู่แล้ว
+export async function addLegacyPoManual(data) {
+  let projectId = "";
+  if (data.project) {
+    const allProjects = await loadProjects();
+    let match = allProjects.find((p) => p.label === data.project);
+    if (!match) {
+      const newId = await addProject({ label: data.project, color: randomColorFor(data.project) });
+      match = { id: newId, label: data.project };
+    }
+    projectId = match.id;
+  }
+  const ref = await addDoc(collection(db, LEGACY_PO_COLLECTION), {
+    poNumber: data.poNumber,
+    contractorNickname: data.contractorNickname || "",
+    vendorName: data.vendorName || "",
+    issueDate: data.issueDate || "",
+    status: data.status || "",
+    lineItems: data.lineItems || [],
+    totalAmount: data.totalAmount ?? null,
+    vatAmount: data.vatAmount ?? null,
+    whtAmount: data.whtAmount ?? null,
+    netPayable: data.netPayable ?? null,
+    notes: data.notes || "",
+    rawProjectText: "",
+    projectId,
+    project: data.project || "",
+    importBatch: "manual",
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+// เช็คว่ามี PO เลขที่นี้ + ช่างประจำนี้อยู่แล้วหรือยัง (ใช้เตือนก่อนเพิ่มเองทีละใบ กันเพิ่มซ้ำโดยไม่รู้ตัว)
+export async function findExistingLegacyPo(poNumber, contractorNickname) {
+  const snap = await getDocs(collection(db, LEGACY_PO_COLLECTION));
+  return snap.docs.find(
+    (d) => d.data().poNumber === poNumber && (d.data().contractorNickname || "") === (contractorNickname || "")
+  );
 }
 
 function randomColorFor(label) {

@@ -23,8 +23,14 @@ service cloud.firestore {
       allow delete: if true;
     }
 
-    match /admins/{uid} {
-      allow read, write: if false;
+    // รายชื่อแอดมิน — ใช้ร่วมกันทั้ง repair-app และ progress-claim-app (Firestore เดียวกัน) จัดการเอง
+    // ได้จากหัวข้อ "🧑‍💼 Manage Admins" ในหน้าแอดมินของทั้งสองระบบ (เพิ่ม/แก้ไข/ปิดใช้งาน — ไม่ลบถาวร)
+    match /admins/{adminId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.resource.data.keys().hasAll(['name', 'active']);
+      allow update: if true;
+      allow delete: if false;
     }
 
     match /categories/{categoryId} {

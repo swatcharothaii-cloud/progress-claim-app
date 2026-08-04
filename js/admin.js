@@ -11,6 +11,9 @@ import { addClaim, resubmitClaim, watchAllClaims, deleteClaim, approveClaimStep,
 import { watchAllContractorJobs, setPoNumber, approveJobDeliveryStep, rejectJobDeliveryStep } from "./contractor-jobs.js";
 import {
   importLegacyPurchaseOrders,
+  importLegacyPurchaseOrderRecords,
+  addLegacyPoManual,
+  findExistingLegacyPo,
   watchAllLegacyPOs,
   reassignLegacyPoProject,
   deleteLegacyPo,
@@ -835,6 +838,318 @@ async function runLegacyPoImport() {
     btn.disabled = false;
   }
 }
+
+// ============================================================
+//  IMPORT FROM EXCEL — ให้แอดมินอัปโหลดไฟล์ .xlsx เองได้ (ไม่ต้องรอให้โปรแกรมเมอร์เตรียมไฟล์ JSON ให้)
+//  ขั้นตอน: เลือกไฟล์ → จับคู่คอลัมน์กับฟิลด์ที่ระบบต้องการ → ดูตัวอย่าง → ยืนยันนำเข้า
+// ============================================================
+const LEGACY_PO_TARGET_FIELDS = [
+  { key: "poNumber", label: "PO Number / เลขที่ PO / PO单号", required: true },
+  { key: "project", label: "Project / โปรเจกต์ / 项目", required: true },
+  { key: "contractorNickname", label: "Contractor nickname / ชื่อเล่นช่าง / 承包商昵称", required: false },
+  { key: "vendorName", label: "Vendor name / ชื่อผู้ขาย / 供应商名称", required: false },
+  { key: "issueDate", label: "Issue date / วันที่ออกเอกสาร / 开单日期", required: false },
+  { key: "status", label: "Status / สถานะ / 状态", required: false },
+  { key: "totalAmount", label: "Total amount / ยอดรวม / 总金额", required: false },
+  { key: "vatAmount", label: "VAT amount / ภาษีมูลค่าเพิ่ม / 增值税", required: false },
+  { key: "whtAmount", label: "WHT amount / หัก ณ ที่จ่าย / 预扣税", required: false },
+  { key: "netPayable", label: "Net payable / ยอดสุทธิ / 净应付金额", required: false },
+  { key: "notes", label: "Notes / หมายเหตุ / 备注", required: false },
+];
+const LEGACY_PO_FIELD_GUESS_PATTERNS = {
+  poNumber: ["po", "เลขที่"],
+  project: ["project", "โปรเจกต์", "site", "ไซต์"],
+  contractorNickname: ["contractor", "ช่าง", "nickname", "ชื่อเล่น"],
+  vendorName: ["vendor", "ผู้ขาย", "supplier"],
+  issueDate: ["date", "วันที่"],
+  status: ["status", "สถานะ"],
+  totalAmount: ["total", "รวม"],
+  vatAmount: ["vat", "ภาษีมูลค่าเพิ่ม"],
+  whtAmount: ["wht", "หัก"],
+  netPayable: ["net", "สุทธิ"],
+  notes: ["note", "หมายเหตุ", "remark"],
+};
+
+function cellToString(v) {
+  if (v == null) return "";
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, "0");
+    const d = String(v.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof v === "object") {
+    if (v.text != null) return String(v.text).trim();
+    if (v.richText) return v.richText.map((t) => t.text || "").join("").trim();
+    if (v.result != null) return String(v.result).trim();
+    return "";
+  }
+  return String(v).trim();
+}
+function cellToNumber(v) {
+  if (v == null || v === "") return null;
+  if (v instanceof Date) return null;
+  if (typeof v === "object" && v.result != null) v = v.result;
+  const n = Number(String(v).replace(/,/g, "").trim());
+  return isNaN(n) ? null : n;
+}
+function guessColumnForField(headers, fieldKey) {
+  const patterns = LEGACY_PO_FIELD_GUESS_PATTERNS[fieldKey] || [];
+  for (let i = 0; i < headers.length; i++) {
+    const h = (headers[i] || "").toLowerCase();
+    if (patterns.some((p) => h.includes(p.toLowerCase()))) return i;
+  }
+  return null;
+}
+
+let excelImportHeaders = [];
+let excelImportDataRows = [];
+let excelImportRecords = [];
+
+function openExcelImportModal() {
+  excelImportHeaders = [];
+  excelImportDataRows = [];
+  excelImportRecords = [];
+  document.getElementById("excel-import-file-input").value = "";
+  document.getElementById("excel-import-progress-status").textContent = "";
+  showExcelImportStep("file");
+  document.getElementById("excel-import-modal").style.display = "flex";
+}
+function closeExcelImportModal() {
+  document.getElementById("excel-import-modal").style.display = "none";
+}
+function showExcelImportStep(step) {
+  document.getElementById("excel-import-step-file").style.display = step === "file" ? "" : "none";
+  document.getElementById("excel-import-step-map").style.display = step === "map" ? "" : "none";
+  document.getElementById("excel-import-step-preview").style.display = step === "preview" ? "" : "none";
+}
+function renderExcelImportMapFields() {
+  const container = document.getElementById("excel-import-map-fields");
+  container.innerHTML = LEGACY_PO_TARGET_FIELDS.map((f) => {
+    const guessedIdx = guessColumnForField(excelImportHeaders, f.key);
+    const options = [`<option value="">— ไม่ใช้ / Not mapped —</option>`]
+      .concat(
+        excelImportHeaders.map(
+          (h, i) => `<option value="${i}" ${i === guessedIdx ? "selected" : ""}>${escapeHtml(h)}</option>`
+        )
+      )
+      .join("");
+    return `
+    <div class="field" style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+      <label style="min-width:260px; margin-bottom:0;">${f.label}${f.required ? " *" : ""}</label>
+      <select class="excel-map-select" data-field="${f.key}" style="flex:1;">${options}</select>
+    </div>`;
+  }).join("");
+}
+function buildRecordsFromExcelMapping(mapping) {
+  const records = [];
+  let skippedMissing = 0;
+  for (const row of excelImportDataRows) {
+    const poNumber = mapping.poNumber != null ? cellToString(row[mapping.poNumber]) : "";
+    const project = mapping.project != null ? cellToString(row[mapping.project]) : "";
+    if (!poNumber || !project) {
+      skippedMissing++;
+      continue;
+    }
+    records.push({
+      poNumber,
+      project,
+      rawProjectText: project,
+      contractorNickname: mapping.contractorNickname != null ? cellToString(row[mapping.contractorNickname]) : "",
+      vendorName: mapping.vendorName != null ? cellToString(row[mapping.vendorName]) : "",
+      issueDate: mapping.issueDate != null ? cellToString(row[mapping.issueDate]) : "",
+      status: mapping.status != null ? cellToString(row[mapping.status]) : "",
+      totalAmount: mapping.totalAmount != null ? cellToNumber(row[mapping.totalAmount]) : null,
+      vatAmount: mapping.vatAmount != null ? cellToNumber(row[mapping.vatAmount]) : null,
+      whtAmount: mapping.whtAmount != null ? cellToNumber(row[mapping.whtAmount]) : null,
+      netPayable: mapping.netPayable != null ? cellToNumber(row[mapping.netPayable]) : null,
+      notes: mapping.notes != null ? cellToString(row[mapping.notes]) : "",
+      lineItems: [],
+    });
+  }
+  return { records, skippedMissing };
+}
+function renderExcelImportPreviewTable(records) {
+  const tbody = document.getElementById("excel-import-preview-tbody");
+  const shown = records.slice(0, 50);
+  tbody.innerHTML =
+    shown
+      .map(
+        (r) => `
+    <tr>
+      <td>${escapeHtml(r.poNumber)}</td>
+      <td>${escapeHtml(r.project)}</td>
+      <td>${escapeHtml(r.contractorNickname)}</td>
+      <td>${escapeHtml(r.vendorName)}</td>
+      <td>${escapeHtml(r.issueDate)}</td>
+      <td>${escapeHtml(r.status)}</td>
+      <td style="text-align:right;">${r.totalAmount != null ? Number(r.totalAmount).toLocaleString("th-TH") : "-"}</td>
+    </tr>`
+      )
+      .join("") +
+    (records.length > 50
+      ? `<tr><td colspan="7" class="hint" style="text-align:center;">...และอีก ${records.length - 50} แถว / and ${records.length - 50} more rows...</td></tr>`
+      : "");
+}
+
+document.getElementById("import-legacy-po-excel-btn").addEventListener("click", openExcelImportModal);
+document.getElementById("close-excel-import-modal").addEventListener("click", closeExcelImportModal);
+document.getElementById("excel-import-back-to-file-btn").addEventListener("click", () => showExcelImportStep("file"));
+document.getElementById("excel-import-back-to-map-btn").addEventListener("click", () => showExcelImportStep("map"));
+
+document.getElementById("excel-import-file-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    const ws = wb.worksheets[0];
+    if (!ws) throw new Error("ไม่พบชีทข้อมูลในไฟล์ / No sheet found in file");
+    const headerRow = ws.getRow(1);
+    const colCount = Math.max(ws.columnCount || 0, headerRow.cellCount || 0);
+    const headers = [];
+    for (let c = 1; c <= colCount; c++) {
+      const v = headerRow.getCell(c).value;
+      headers.push(cellToString(v) || `Column ${c}`);
+    }
+    const dataRows = [];
+    ws.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const cells = [];
+      for (let c = 1; c <= colCount; c++) cells.push(row.getCell(c).value);
+      if (cells.every((v) => v == null || v === "")) return;
+      dataRows.push(cells);
+    });
+    if (!dataRows.length) {
+      throw new Error("ไม่พบข้อมูลในไฟล์ (ต้องมีหัวตารางแถวแรก และมีข้อมูลอย่างน้อย 1 แถว) / No data rows found");
+    }
+    excelImportHeaders = headers;
+    excelImportDataRows = dataRows;
+    renderExcelImportMapFields();
+    showExcelImportStep("map");
+  } catch (err) {
+    console.error(err);
+    showToast("อ่านไฟล์ไม่สำเร็จ / Failed to read file: " + err.message);
+  }
+});
+
+document.getElementById("excel-import-preview-btn").addEventListener("click", () => {
+  const mapping = {};
+  document.querySelectorAll(".excel-map-select").forEach((s) => {
+    if (s.value !== "") mapping[s.dataset.field] = Number(s.value);
+  });
+  if (mapping.poNumber == null || mapping.project == null) {
+    showToast("กรุณาจับคู่คอลัมน์ 'เลขที่ PO' และ 'โปรเจกต์' อย่างน้อย / Please map PO Number and Project at least");
+    return;
+  }
+  const { records, skippedMissing } = buildRecordsFromExcelMapping(mapping);
+  excelImportRecords = records;
+  document.getElementById("excel-import-preview-summary").textContent =
+    `พบข้อมูล ${excelImportDataRows.length} แถว, พร้อมนำเข้า ${records.length} แถว, ข้าม ${skippedMissing} แถว (ไม่มีเลขที่ PO หรือโปรเจกต์) / ${excelImportDataRows.length} rows detected, ${records.length} ready to import, ${skippedMissing} skipped (missing PO number or project).`;
+  renderExcelImportPreviewTable(records);
+  showExcelImportStep("preview");
+});
+
+document.getElementById("excel-import-confirm-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("excel-import-confirm-btn");
+  const statusEl = document.getElementById("excel-import-progress-status");
+  if (!excelImportRecords.length) {
+    showToast("ไม่มีรายการที่จะนำเข้า / Nothing to import");
+    return;
+  }
+  btn.disabled = true;
+  try {
+    statusEl.textContent = "กำลังนำเข้า... / Importing...";
+    const importBatch = "excel_" + todayStr();
+    const result = await importLegacyPurchaseOrderRecords(
+      excelImportRecords,
+      (done, total) => {
+        statusEl.textContent = `กำลังนำเข้า ${done}/${total}... / Importing ${done}/${total}...`;
+      },
+      importBatch
+    );
+    await refreshProjects();
+    statusEl.textContent = `เสร็จแล้ว: นำเข้าใหม่ ${result.created} รายการ, ข้ามที่มีอยู่แล้ว ${result.skipped} รายการ / Done: ${result.created} imported, ${result.skipped} skipped (already imported).`;
+    showToast(T.msgSaved.th);
+    setTimeout(closeExcelImportModal, 1400);
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = "นำเข้าไม่สำเร็จ / Import failed: " + e.message;
+    showToast(T.msgSavedFail.th);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ============================================================
+//  ADD PO MANUALLY — เพิ่มใบสั่งซื้อเก่าทีละใบ (เช่น อ่านค่าจากไฟล์ PDF แล้วพิมพ์กรอกเอง)
+// ============================================================
+function openManualPoModal() {
+  document.getElementById("mp-po-number").value = "";
+  document.getElementById("mp-project").value = "";
+  document.getElementById("mp-contractor").value = "";
+  document.getElementById("mp-vendor").value = "";
+  document.getElementById("mp-date").value = "";
+  document.getElementById("mp-status").value = "";
+  document.getElementById("mp-total").value = "";
+  document.getElementById("mp-vat").value = "";
+  document.getElementById("mp-wht").value = "";
+  document.getElementById("mp-net").value = "";
+  document.getElementById("mp-notes").value = "";
+  document.getElementById("mp-project-options").innerHTML = allProjects
+    .map((p) => `<option value="${escapeHtml(p.label)}"></option>`)
+    .join("");
+  document.getElementById("manual-po-modal").style.display = "flex";
+}
+function closeManualPoModal() {
+  document.getElementById("manual-po-modal").style.display = "none";
+}
+document.getElementById("add-legacy-po-manual-btn").addEventListener("click", openManualPoModal);
+document.getElementById("close-manual-po-modal").addEventListener("click", closeManualPoModal);
+document.getElementById("cancel-manual-po-btn").addEventListener("click", closeManualPoModal);
+
+document.getElementById("save-manual-po-btn").addEventListener("click", async () => {
+  const poNumber = document.getElementById("mp-po-number").value.trim();
+  const project = document.getElementById("mp-project").value.trim();
+  const contractorNickname = document.getElementById("mp-contractor").value.trim();
+  if (!poNumber || !project) {
+    showToast("กรุณากรอกเลขที่ PO และโปรเจกต์ / Please fill in PO Number and Project");
+    return;
+  }
+  const existing = await findExistingLegacyPo(poNumber, contractorNickname);
+  if (existing) {
+    const proceed = confirm(
+      `พบใบสั่งซื้อเลขที่ "${poNumber}" ของช่าง "${contractorNickname || "-"}" อยู่แล้วในระบบ ต้องการเพิ่มซ้ำหรือไม่?\nA PO with this number and contractor already exists — add a duplicate anyway?`
+    );
+    if (!proceed) return;
+  }
+  const btn = document.getElementById("save-manual-po-btn");
+  btn.disabled = true;
+  try {
+    await addLegacyPoManual({
+      poNumber,
+      project,
+      contractorNickname,
+      vendorName: document.getElementById("mp-vendor").value.trim(),
+      issueDate: document.getElementById("mp-date").value,
+      status: document.getElementById("mp-status").value.trim(),
+      totalAmount: document.getElementById("mp-total").value !== "" ? Number(document.getElementById("mp-total").value) : null,
+      vatAmount: document.getElementById("mp-vat").value !== "" ? Number(document.getElementById("mp-vat").value) : null,
+      whtAmount: document.getElementById("mp-wht").value !== "" ? Number(document.getElementById("mp-wht").value) : null,
+      netPayable: document.getElementById("mp-net").value !== "" ? Number(document.getElementById("mp-net").value) : null,
+      notes: document.getElementById("mp-notes").value.trim(),
+    });
+    await refreshProjects();
+    showToast(T.msgSaved.th);
+    closeManualPoModal();
+  } catch (e) {
+    console.error(e);
+    showToast(T.msgSavedFail.th);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 function renderLegacyPoTable() {
   const tbody = document.getElementById("legacy-po-tbody");

@@ -105,6 +105,8 @@
     <p class="hint" style="margin-top:10px;">ใบสั่งซื้อเก่าที่เคยออกผ่านโปรแกรมบัญชี PEAK ก่อนจะมีระบบนี้ — นำเข้าครั้งเดียว แยกตามโปรเจกต์ให้อัตโนมัติ กรองตามโปรเจกต์ที่เลือกไว้ด้านบนได้เหมือนกับส่วนอื่นๆ / Legacy PO documents issued via PEAK before this system existed — import once, auto-grouped by project.</p>
     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:12px 0;">
       <button class="btn btn-primary btn-sm" id="import-legacy-po-btn">📥 Import from PEAK / นำเข้าจาก PEAK / 从PEAK导入</button>
+      <button class="btn btn-outline btn-sm" id="import-legacy-po-excel-btn">📤 Import from Excel / นำเข้าจากไฟล์ Excel / 从Excel导入</button>
+      <button class="btn btn-outline btn-sm" id="add-legacy-po-manual-btn">✏️ Add PO Manually / เพิ่ม PO เอง / 手动添加PO</button>
       <span class="hint" id="legacy-po-import-status"></span>
     </div>
     <div class="table-wrap">
@@ -315,6 +317,122 @@
         <button class="btn btn-sm" id="legacy-po-delete-btn" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5;">🗑️ Delete / ลบ / 删除</button>
         <button class="btn btn-outline" id="legacy-po-view-close-btn">Close / ปิด / 关闭</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EXCEL IMPORT MODAL (self-service PO import) ============ -->
+<div class="modal-overlay" id="excel-import-modal" style="display:none;">
+  <div class="modal-sheet" style="max-width:920px;">
+    <div class="modal-header">
+      <h3>📤 Import PO from Excel / นำเข้า PO จากไฟล์ Excel / 从Excel导入PO</h3>
+      <button class="icon-btn" id="close-excel-import-modal">✕</button>
+    </div>
+
+    <div id="excel-import-step-file">
+      <p class="hint">อัปโหลดไฟล์ Excel (.xlsx) ที่มีหัวคอลัมน์อยู่ในแถวแรก ระบบจะอ่านชีทแรกในไฟล์ให้อัตโนมัติ / Upload an .xlsx file with column headers in the first row — the first sheet in the file will be read automatically.</p>
+      <div class="field">
+        <input type="file" id="excel-import-file-input" accept=".xlsx,.xls">
+      </div>
+    </div>
+
+    <div id="excel-import-step-map" style="display:none;">
+      <p class="hint">จับคู่คอลัมน์ในไฟล์ของคุณกับฟิลด์ที่ระบบต้องการ (ต้องจับคู่ "เลขที่ PO" และ "โปรเจกต์" อย่างน้อย) / Map your file's columns to the fields below (PO Number and Project must be mapped at minimum):</p>
+      <div id="excel-import-map-fields"></div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+        <button class="btn btn-outline" id="excel-import-back-to-file-btn">← Back / ย้อนกลับ / 返回</button>
+        <button class="btn btn-primary" id="excel-import-preview-btn">Preview → / ดูตัวอย่าง → / 预览 →</button>
+      </div>
+    </div>
+
+    <div id="excel-import-step-preview" style="display:none;">
+      <p class="hint" id="excel-import-preview-summary"></p>
+      <div class="table-wrap" style="max-height:360px; overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>PO No.</th><th>Project</th><th>Contractor</th><th>Vendor</th><th>Date</th><th>Status</th><th style="text-align:right;">Total</th>
+            </tr>
+          </thead>
+          <tbody id="excel-import-preview-tbody"></tbody>
+        </table>
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+        <button class="btn btn-outline" id="excel-import-back-to-map-btn">← Back / ย้อนกลับ / 返回</button>
+        <button class="btn btn-primary" id="excel-import-confirm-btn">✅ Import / นำเข้า / 导入</button>
+      </div>
+      <p class="hint" id="excel-import-progress-status" style="margin-top:10px;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MANUAL PO ADD MODAL (e.g. entering values read off a PDF) ============ -->
+<div class="modal-overlay" id="manual-po-modal" style="display:none;">
+  <div class="modal-sheet" style="max-width:640px;">
+    <div class="modal-header">
+      <h3>✏️ Add PO Manually / เพิ่มใบสั่งซื้อเอง / 手动添加采购单</h3>
+      <button class="icon-btn" id="close-manual-po-modal">✕</button>
+    </div>
+    <p class="hint">ใช้เพิ่มใบสั่งซื้อเก่าทีละใบ เช่น อ่านค่าจากไฟล์ PDF แล้วพิมพ์กรอกเอง / Use this to add a single legacy PO — e.g. read the values off a PDF and type them in here.</p>
+
+    <div class="field">
+      <label>PO Number * / เลขที่ PO * / PO单号 *</label>
+      <input type="text" id="mp-po-number" required>
+    </div>
+    <div class="field">
+      <label>Project * / โปรเจกต์ * / 项目 *</label>
+      <input type="text" id="mp-project" list="mp-project-options" required placeholder="Pick or type a new project name / เลือกหรือพิมพ์ชื่อโปรเจกต์ใหม่">
+      <datalist id="mp-project-options"></datalist>
+      <p class="hint" style="margin-top:4px;">พิมพ์ชื่อโปรเจกต์ใหม่ได้ถ้ายังไม่มีในระบบ — จะสร้างให้อัตโนมัติ / Type a new project name if it doesn't exist yet — it will be created automatically.</p>
+    </div>
+    <div style="display:flex; gap:12px;">
+      <div class="field" style="flex:1;">
+        <label>Contractor nickname / ชื่อเล่นช่าง / 承包商昵称</label>
+        <input type="text" id="mp-contractor">
+      </div>
+      <div class="field" style="flex:1;">
+        <label>Vendor name / ชื่อผู้ขาย / 供应商名称</label>
+        <input type="text" id="mp-vendor">
+      </div>
+    </div>
+    <div style="display:flex; gap:12px;">
+      <div class="field" style="flex:1;">
+        <label>Issue date / วันที่ออกเอกสาร / 开单日期</label>
+        <input type="date" id="mp-date">
+      </div>
+      <div class="field" style="flex:1;">
+        <label>Status / สถานะ / 状态</label>
+        <input type="text" id="mp-status" placeholder="e.g. เสร็จสมบูรณ์">
+      </div>
+    </div>
+    <div style="display:flex; gap:12px;">
+      <div class="field" style="flex:1;">
+        <label>Total amount / ยอดรวมก่อนภาษี / 总金额</label>
+        <input type="number" id="mp-total" min="0" step="0.01">
+      </div>
+      <div class="field" style="flex:1;">
+        <label>VAT amount / ภาษีมูลค่าเพิ่ม / 增值税</label>
+        <input type="number" id="mp-vat" min="0" step="0.01">
+      </div>
+    </div>
+    <div style="display:flex; gap:12px;">
+      <div class="field" style="flex:1;">
+        <label>WHT amount / หัก ณ ที่จ่าย / 预扣税</label>
+        <input type="number" id="mp-wht" min="0" step="0.01">
+      </div>
+      <div class="field" style="flex:1;">
+        <label>Net payable / ยอดสุทธิที่ต้องจ่าย / 净应付金额</label>
+        <input type="number" id="mp-net" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes / หมายเหตุ / 备注</label>
+      <textarea id="mp-notes" rows="2"></textarea>
+    </div>
+
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+      <button class="btn btn-outline" id="cancel-manual-po-btn">Cancel / ยกเลิก / 取消</button>
+      <button class="btn btn-primary" id="save-manual-po-btn">Save / บันทึก / 保存</button>
     </div>
   </div>
 </div>
