@@ -96,5 +96,14 @@ service cloud.firestore {
       allow update: if true;
       allow delete: if true;
     }
+
+    // ใบส่งมอบงานของ PO เก่าแต่ละใบ (ทำได้หลายใบต่อ PO เดียว — ส่งเป็นงวดๆ) — collection ใหม่แยกจากตัว PO เอง
+    match /legacyPoDeliveryNotes/{noteId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.resource.data.keys().hasAll(['poId', 'poNumber']);
+      allow update: if true;
+      allow delete: if true;
+    }
   }
 }

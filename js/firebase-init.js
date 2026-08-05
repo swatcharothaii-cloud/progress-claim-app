@@ -17,6 +17,7 @@ import {
   orderBy,
   where,
   serverTimestamp,
+  increment,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import { FIREBASE_CONFIG } from "./config.js";
@@ -39,6 +40,7 @@ export {
   orderBy,
   where,
   serverTimestamp,
+  increment,
 };
 
 export const CLAIMS_COLLECTION = "progressClaims";

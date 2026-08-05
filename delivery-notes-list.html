@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Notes / รายการใบส่งมอบงาน / 交付单列表</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="brand-bar brand-bar--admin" id="brand-bar"></div>
+
+<div style="max-width:900px; margin:20px auto; padding:0 16px 60px;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+    <a href="admin.html" class="btn btn-outline btn-sm">← Back to Archive / กลับไปหน้าคลัง PO / 返回采购单存档</a>
+  </div>
+
+  <div id="loading-state" class="hint" style="padding:60px 0; text-align:center; font-size:15px;">Loading… / กำลังโหลด… / 加载中…</div>
+
+  <div id="dnl-body" style="display:none;">
+    <div class="dn-doc" style="background:#fff; margin-bottom:16px;">
+      <div class="dn-doc-title-bar">
+        <div class="dn-doc-title">
+          Delivery Notes / รายการใบส่งมอบงาน / 交付单列表
+          <span class="sub" id="dnl-subtitle"></span>
+        </div>
+        <div class="dn-doc-no">
+          PO No. / เลขที่ PO
+          <b id="dnl-po-number"></b>
+        </div>
+      </div>
+      <div class="dn-section-title">🗂️ PO Information / ข้อมูล PO</div>
+      <table class="dn-table">
+        <tr>
+          <td class="dn-label">Project<br>โปรเจกต์</td>
+          <td class="dn-value" id="dnl-project"></td>
+          <td class="dn-label-2">Total<br>มูลค่ารวม</td>
+          <td class="dn-value" id="dnl-total"></td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+      <p class="hint" style="margin:0;">PO ใบนี้ส่งมอบงานได้หลายใบ (ส่งเป็นงวดๆ) — กด "ดู/แก้ไข" เพื่อเปิดใบเดิม หรือสร้างใบใหม่ได้จากปุ่มด้านขวา / One PO can have multiple delivery notes (partial deliveries) — open an existing one or create a new one</p>
+      <button class="btn btn-primary btn-sm" id="dnl-create-btn" style="white-space:nowrap;">➕ สร้างใบส่งมอบงานใหม่ / New delivery note</button>
+    </div>
+
+    <div id="dnl-empty-state" class="hint" style="padding:30px 0; text-align:center; display:none;">ยังไม่มีใบส่งมอบงานสำหรับ PO นี้ — กด "➕ สร้างใบส่งมอบงานใหม่" ด้านบนเพื่อสร้างใบแรก / No delivery notes yet — click "New delivery note" above to create the first one</div>
+
+    <table id="dnl-table" style="width:100%;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Delivery date / วันที่ส่งมอบ</th>
+          <th>Photos / รูปภาพ</th>
+          <th>Approval / สถานะอนุมัติ</th>
+          <th>Created by / ผู้สร้าง</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="dnl-tbody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module" src="js/delivery-notes-list.js"></script>
+</body>
+</html>

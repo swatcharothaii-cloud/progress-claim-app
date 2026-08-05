@@ -2,8 +2,13 @@
 // นำเข้าครั้งเดียวจากไฟล์ data/legacy-po-import-2026.json (แปลงมาจากไฟล์ Excel ที่ผู้ใช้อัปโหลดให้)
 // แล้วเก็บไว้ใน collection "legacyPurchaseOrders" เพื่อดูอ้างอิง/แยกตามโปรเจกต์ — เป็นข้อมูลเก็บถาวร
 // ไม่มีการแก้ไขยอดเงินจากหน้านี้ (แก้ได้แค่ "โปรเจกต์ที่สังกัด" เผื่อจัดกลุ่มผิดตอนนำเข้า)
-import { db, collection, doc, addDoc, updateDoc, deleteDoc, getDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp } from "./firebase-init.js";
+import { db, collection, doc, addDoc, updateDoc, deleteDoc, getDoc, getDocs, onSnapshot, query, orderBy, where, serverTimestamp, increment } from "./firebase-init.js";
 import { LEGACY_PO_COLLECTION, PROJECTS_COLLECTION } from "./firebase-init.js";
+
+// คอลเลกชันใหม่: "ใบส่งมอบงาน" ของ PO เก่าแต่ละใบ — แยกเป็นเอกสารของตัวเอง ทำให้ PO 1 ใบ
+// มีใบส่งมอบงานได้หลายใบ (ส่งเป็นงวดๆ) แทนที่จะมีได้ใบเดียวเหมือนเดิม (ฟิลด์ deliveryPhotos/
+// deliveryDate/approval บนตัว PO เองที่ใช้แบบเดิมยังเก็บไว้เผื่อความเข้ากันได้ แต่ไม่ใช้สร้างใหม่แล้ว)
+export const LEGACY_PO_DELIVERY_NOTES_COLLECTION = "legacyPoDeliveryNotes";
 import { loadProjects, addProject } from "./projects.js";
 import { createFreshApproval, approveApprovalStep, rejectApprovalStep } from "./approval.js";
 
@@ -220,5 +225,92 @@ export async function rejectLegacyPoDeliveryStep(id, actorName, note) {
     deliveryNoteUpdatedAt: serverTimestamp(),
     deliveryNoteUpdatedBy: actorName || "",
   });
+  return approval;
+}
+
+// ============================================================
+//  ใบส่งมอบงานหลายใบต่อ PO (ใบที่ 1, 2, 3, ... — ส่งเป็นงวดๆ ได้)
+//  แต่ละใบเป็นเอกสารแยกใน collection "legacyPoDeliveryNotes" อ้างอิงกลับไปที่ poId
+//  เก็บข้อมูล PO ที่จำเป็นต่อการแสดงผล (poNumber/project/contractorNickname/vendorName/totalAmount)
+//  แบบ snapshot ไว้ในตัวใบส่งมอบงานเองด้วย เพื่อไม่ต้อง query ซ้อน PO ทุกครั้งที่เปิดดู
+// ============================================================
+
+function tsToMs(ts) {
+  if (!ts) return 0;
+  if (typeof ts.toMillis === "function") return ts.toMillis();
+  if (ts instanceof Date) return ts.getTime();
+  return 0;
+}
+
+// สร้างใบส่งมอบงานใหม่ (ใบที่เท่าไหร่ก็ได้ ไม่ทับใบเก่า) สำหรับ PO นี้
+export async function createDeliveryNoteForPo(po, createdBy) {
+  const ref = await addDoc(collection(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION), {
+    poId: po.id,
+    poNumber: po.poNumber || "",
+    project: po.project || "",
+    contractorNickname: po.contractorNickname || "",
+    vendorName: po.vendorName || "",
+    totalAmount: po.totalAmount ?? null,
+    status: po.status || "",
+    issueDate: po.issueDate || "",
+    deliveryPhotos: [],
+    deliveryDate: "",
+    note: "",
+    approval: createFreshApproval(),
+    createdAt: serverTimestamp(),
+    createdBy: createdBy || "",
+    updatedAt: serverTimestamp(),
+    updatedBy: createdBy || "",
+  });
+  // เก็บตัวนับจำนวนใบไว้ที่ตัว PO เอง ให้ตารางหลักโชว์ badge ได้โดยไม่ต้อง query เพิ่มทุกแถว
+  await updateDoc(doc(db, LEGACY_PO_COLLECTION, po.id), { deliveryNoteCount: increment(1) });
+  return ref.id;
+}
+
+// รายการใบส่งมอบงานทั้งหมดของ PO ใบนี้ — ใหม่สุดก่อน
+export async function listDeliveryNotesForPo(poId) {
+  const snap = await getDocs(query(collection(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION), where("poId", "==", poId)));
+  const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  list.sort((a, b) => tsToMs(b.createdAt) - tsToMs(a.createdAt));
+  return list;
+}
+
+export async function getDeliveryNoteById(id) {
+  const snap = await getDoc(doc(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION, id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+// บันทึกเนื้อหาใบส่งมอบงานใบนี้ (รูปภาพ/วันที่ส่งมอบ/หมายเหตุ) — แก้ไขแล้วเริ่มอนุมัติใหม่ตั้งแต่ขั้นตอนที่ 1 เสมอ
+export async function updateDeliveryNote(id, data, updatedBy) {
+  await updateDoc(doc(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION, id), {
+    deliveryPhotos: data.deliveryPhotos || [],
+    deliveryDate: data.deliveryDate || "",
+    note: data.note || "",
+    approval: createFreshApproval(),
+    updatedAt: serverTimestamp(),
+    updatedBy: updatedBy || "",
+  });
+}
+
+export async function deleteDeliveryNote(id, poId) {
+  await deleteDoc(doc(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION, id));
+  if (poId) {
+    await updateDoc(doc(db, LEGACY_PO_COLLECTION, poId), { deliveryNoteCount: increment(-1) });
+  }
+}
+
+export async function approveDeliveryNoteStep(id, actorName, note) {
+  const snap = await getDoc(doc(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION, id));
+  const p = snap.exists() ? snap.data() : null;
+  const approval = approveApprovalStep(p?.approval, actorName, note, serverTimestamp);
+  await updateDoc(doc(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION, id), { approval, updatedAt: serverTimestamp(), updatedBy: actorName || "" });
+  return approval;
+}
+
+export async function rejectDeliveryNoteStep(id, actorName, note) {
+  const snap = await getDoc(doc(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION, id));
+  const p = snap.exists() ? snap.data() : null;
+  const approval = rejectApprovalStep(p?.approval, actorName, note, serverTimestamp);
+  await updateDoc(doc(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION, id), { approval, updatedAt: serverTimestamp(), updatedBy: actorName || "" });
   return approval;
 }

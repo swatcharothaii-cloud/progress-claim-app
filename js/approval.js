@@ -82,18 +82,18 @@ export function ensureApproval(approval) {
   return isValidApproval(approval) ? approval : createFreshApproval();
 }
 
-function nowIso() {
-  return new Date().toISOString();
-}
-
 // อนุมัติขั้นตอนปัจจุบัน (actorName = currentAdmin.name ของคนที่กดอยู่ ณ ตอนนั้น)
-// timestampFn: ฟังก์ชันสร้าง timestamp (ปกติคือ serverTimestamp() ของ Firestore) — inject เข้ามาเพื่อไม่ผูกกับ Firebase โดยตรง
+// timestampFn: เดิมตั้งใจไว้ให้ส่ง serverTimestamp() ของ Firestore เข้ามา แต่ "at" ด้านล่างนี้อยู่ใน
+// array (a.steps) ซึ่ง Firestore ไม่รองรับ serverTimestamp() ภายใน array (จะได้ FirebaseError:
+// "serverTimestamp() is not currently supported inside arrays" ตอนบันทึกจริง) จึงต้องใช้เวลาฝั่ง
+// client (new Date()) แทนเสมอสำหรับฟิลด์นี้โดยเฉพาะ — ไม่ใช้ timestampFn ที่รับเข้ามาแล้ว (คงพารามิเตอร์
+// นี้ไว้เพื่อไม่ต้องแก้ทุกจุดที่เรียกใช้ฟังก์ชันนี้)
 export function approveApprovalStep(approval, actorName, note, timestampFn) {
   const a = ensureApproval(approval);
   if (a.status !== APPROVAL_STATUS.IN_PROGRESS) return a;
   const idx = a.steps.findIndex((s) => s.step === a.currentStep);
   if (idx === -1) return a;
-  const ts = typeof timestampFn === "function" ? timestampFn() : nowIso();
+  const ts = new Date();
   a.steps[idx] = {
     ...a.steps[idx],
     status: "approved",
@@ -110,12 +110,13 @@ export function approveApprovalStep(approval, actorName, note, timestampFn) {
 }
 
 // ปฏิเสธขั้นตอนปัจจุบัน — จบกระบวนการทันที (ไม่ไปต่อขั้นถัดไป)
+// (ดูหมายเหตุเรื่อง serverTimestamp() ใน array ที่ approveApprovalStep ด้านบน — ใช้เหตุผลเดียวกัน)
 export function rejectApprovalStep(approval, actorName, note, timestampFn) {
   const a = ensureApproval(approval);
   if (a.status !== APPROVAL_STATUS.IN_PROGRESS) return a;
   const idx = a.steps.findIndex((s) => s.step === a.currentStep);
   if (idx === -1) return a;
-  const ts = typeof timestampFn === "function" ? timestampFn() : nowIso();
+  const ts = new Date();
   a.steps[idx] = {
     ...a.steps[idx],
     status: "rejected",

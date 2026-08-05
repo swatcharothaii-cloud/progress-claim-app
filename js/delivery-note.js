@@ -3,7 +3,7 @@
 import { ADMINS, COMPANY, MAX_IMAGES, MAX_IMAGE_MB } from "./config.js";
 import { renderCompanyBrandBar, showToast, formatDateThai, formatMoney, escapeHtml, todayStr } from "./utils.js";
 import { compressImageToDataUrl } from "./image-compress.js";
-import { getLegacyPoById, updateLegacyPoDeliveryNote, approveLegacyPoDeliveryStep, rejectLegacyPoDeliveryStep } from "./legacy-po.js";
+import { getDeliveryNoteById, updateDeliveryNote, approveDeliveryNoteStep, rejectDeliveryNoteStep } from "./legacy-po.js";
 import { ensureApproval, renderApprovalStepper, APPROVAL_STATUS, APPROVAL_STEP_DEFS } from "./approval.js";
 
 renderCompanyBrandBar("brand-bar", COMPANY);
@@ -25,8 +25,8 @@ if (!currentAdmin) {
   location.href = "admin.html";
 }
 
-const poId = new URLSearchParams(location.search).get("id");
-let po = null;
+const noteId = new URLSearchParams(location.search).get("noteId");
+let note = null; // เอกสารใบส่งมอบงานใบนี้โดยเฉพาะ (1 ใบ ใน collection legacyPoDeliveryNotes)
 let photos = []; // [{ url, description, percent, passed: "passed"|"failed"|"" }]
 // เก็บ snapshot ของเนื้อหาล่าสุดที่บันทึกไว้ — ใช้เช็คว่ามีการแก้ไขเนื้อหาจริงหรือไม่ก่อนบันทึก
 // (ปุ่ม "พิมพ์" จะเรียก save() ก่อนเสมอเพื่อไม่ให้ข้อมูลที่เพิ่งแก้หาย แต่ถ้าไม่มีอะไรเปลี่ยนเลย
@@ -35,22 +35,22 @@ let lastSavedSnapshot = "";
 
 async function init() {
   if (!currentAdmin) return; // กำลังจะ redirect อยู่แล้วด้านบน
-  if (!poId) {
-    document.getElementById("loading-state").textContent = "Missing PO id / ไม่พบรหัส PO ในลิงก์ / 链接缺少PO编号";
+  if (!noteId) {
+    document.getElementById("loading-state").textContent = "Missing delivery note id / ไม่พบรหัสใบส่งมอบงานในลิงก์ / 链接缺少交付单编号";
     return;
   }
   try {
-    po = await getLegacyPoById(poId);
+    note = await getDeliveryNoteById(noteId);
   } catch (e) {
     console.error(e);
     document.getElementById("loading-state").textContent = "Failed to load / โหลดข้อมูลไม่สำเร็จ / 加载失败";
     return;
   }
-  if (!po) {
-    document.getElementById("loading-state").textContent = "PO not found / ไม่พบใบสั่งซื้อนี้ / 未找到该采购单";
+  if (!note) {
+    document.getElementById("loading-state").textContent = "Delivery note not found / ไม่พบใบส่งมอบงานนี้ / 未找到该交付单";
     return;
   }
-  photos = (po.deliveryPhotos || []).map((ph) => ({ ...ph }));
+  photos = (note.deliveryPhotos || []).map((ph) => ({ ...ph }));
   renderHeader();
   renderPhotoList();
   renderApprovalSection();
@@ -60,21 +60,23 @@ async function init() {
 }
 
 function renderHeader() {
-  document.title = `Delivery Note / ใบส่งมอบงาน — ${po.poNumber || ""}`;
-  document.getElementById("dn-subtitle").textContent = `${po.contractorNickname || ""} — ${po.vendorName || ""}`;
-  document.getElementById("dn-po-number").textContent = po.poNumber || "-";
-  document.getElementById("dn-issue-date").textContent = formatDateThai(po.issueDate);
-  document.getElementById("dn-project").textContent = po.project || "-";
-  document.getElementById("dn-total").innerHTML = `<b>฿${po.totalAmount != null ? Number(po.totalAmount).toLocaleString("th-TH") : "-"}</b>`;
-  document.getElementById("dn-status").textContent = po.status || "-";
-  document.getElementById("dn-delivery-date").value = po.deliveryDate || todayStr();
+  document.title = `Delivery Note / ใบส่งมอบงาน — ${note.poNumber || ""}`;
+  document.getElementById("dn-subtitle").textContent = `${note.contractorNickname || ""} — ${note.vendorName || ""}`;
+  document.getElementById("dn-po-number").textContent = note.poNumber || "-";
+  document.getElementById("dn-issue-date").textContent = formatDateThai(note.issueDate);
+  document.getElementById("dn-project").textContent = note.project || "-";
+  document.getElementById("dn-total").innerHTML = `<b>฿${note.totalAmount != null ? Number(note.totalAmount).toLocaleString("th-TH") : "-"}</b>`;
+  document.getElementById("dn-status").textContent = note.status || "-";
+  document.getElementById("dn-delivery-date").value = note.deliveryDate || todayStr();
+  const backLink = document.getElementById("back-to-list-link");
+  if (backLink && note.poId) backLink.href = `delivery-notes-list.html?poId=${note.poId}`;
 }
 
 // แสดงแถบขั้นตอนอนุมัติ 4 ขั้น + ปุ่มอนุมัติ/ปฏิเสธขั้นตอนปัจจุบัน (ใครก็ได้ที่ล็อกอินอยู่กดแทนขั้นตอนไหนก็ได้)
 function renderApprovalSection() {
   const el = document.getElementById("dn-approval-section");
   if (!el) return;
-  const approval = ensureApproval(po.approval);
+  const approval = ensureApproval(note.approval);
   const stepperHtml = renderApprovalStepper(approval, { lang: "all", escapeHtml });
   let actionsHtml = "";
   if (approval.status === APPROVAL_STATUS.IN_PROGRESS) {
@@ -92,7 +94,7 @@ function renderApprovalSection() {
     approveBtn.addEventListener("click", async () => {
       if (!confirm(`Approve this step as "${currentAdmin?.name}"? / ยืนยันอนุมัติขั้นตอนนี้ในนาม "${currentAdmin?.name}"?`)) return;
       try {
-        po.approval = await approveLegacyPoDeliveryStep(poId, currentAdmin?.name, "");
+        note.approval = await approveDeliveryNoteStep(noteId, currentAdmin?.name, "");
         showToast("บันทึกแล้ว / Saved / 已保存");
         renderApprovalSection();
       } catch (e) {
@@ -104,10 +106,10 @@ function renderApprovalSection() {
   const rejectBtn = document.getElementById("dn-reject-step-btn");
   if (rejectBtn) {
     rejectBtn.addEventListener("click", async () => {
-      const note = prompt("Reason for rejection (optional) / เหตุผลที่ปฏิเสธ (ถ้ามี):", "") || "";
+      const rejectNote = prompt("Reason for rejection (optional) / เหตุผลที่ปฏิเสธ (ถ้ามี):", "") || "";
       if (!confirm(`Reject this step? The process will end and it must be revised and resubmitted from step 1. / ยืนยันปฏิเสธ? กระบวนการจะจบทันที ต้องแก้ไขแล้วส่งใหม่ตั้งแต่ขั้นตอนที่ 1`)) return;
       try {
-        po.approval = await rejectLegacyPoDeliveryStep(poId, currentAdmin?.name, note);
+        note.approval = await rejectDeliveryNoteStep(noteId, currentAdmin?.name, rejectNote);
         showToast("บันทึกแล้ว / Saved / 已保存");
         renderApprovalSection();
       } catch (e) {
@@ -128,7 +130,11 @@ function renderPhotoList() {
     .map(
       (ph, i) => `
     <div class="legacy-delivery-photo-item" data-idx="${i}">
-      <img src="${ph.url}" class="ldp-thumb" data-idx="${i}">
+      ${
+        ph.url
+          ? `<img src="${ph.url}" class="ldp-thumb" data-idx="${i}">`
+          : `<div class="ldp-thumb" data-idx="${i}" style="display:flex; align-items:center; justify-content:center; text-align:center; font-size:11px; color:#991b1b; background:#fef2f2; border:1px dashed #fca5a5; padding:4px;">⚠️ ไม่มีรูปภาพ<br>(ข้อมูลว่าง)</div>`
+      }
       <div class="legacy-delivery-photo-fields">
         <textarea class="ldp-desc" data-idx="${i}" rows="2" placeholder="คำอธิบายภาพ / Photo description / 图片说明">${escapeHtml(ph.description || "")}</textarea>
         <div class="legacy-delivery-photo-row">
@@ -140,7 +146,7 @@ function renderPhotoList() {
             <option value="passed" ${ph.passed === "passed" ? "selected" : ""}>✅ ผ่าน / Passed</option>
             <option value="failed" ${ph.passed === "failed" ? "selected" : ""}>❌ ไม่ผ่าน / Failed</option>
           </select>
-          <button type="button" class="btn btn-sm ldp-remove" data-idx="${i}" style="margin-left:auto; background:#fee2e2; color:#991b1b;">🗑️</button>
+          <button type="button" class="btn btn-sm ldp-remove" data-idx="${i}" style="margin-left:auto; background:#fee2e2; color:#991b1b; white-space:nowrap;">🗑️ ลบรูปนี้</button>
         </div>
       </div>
     </div>`
@@ -148,7 +154,9 @@ function renderPhotoList() {
     .join("");
 
   wrap.querySelectorAll(".ldp-thumb").forEach((img) => {
-    img.addEventListener("click", () => openLightbox(photos, Number(img.dataset.idx)));
+    const idx = Number(img.dataset.idx);
+    if (!photos[idx]?.url) return; // ไม่มีรูปจริง — กดแล้วไม่ต้องเปิด lightbox เปล่าๆ
+    img.addEventListener("click", () => openLightbox(photos, idx));
   });
   wrap.querySelectorAll(".ldp-desc").forEach((el) => {
     el.addEventListener("input", () => {
@@ -208,9 +216,9 @@ async function save() {
   const snapshot = JSON.stringify(formData);
   if (snapshot === lastSavedSnapshot) return true; // ไม่มีอะไรเปลี่ยน — ไม่ต้องบันทึกซ้ำ ไม่กระทบการอนุมัติที่มีอยู่
   try {
-    await updateLegacyPoDeliveryNote(poId, formData, currentAdmin?.name);
+    await updateDeliveryNote(noteId, formData, currentAdmin?.name);
     lastSavedSnapshot = snapshot;
-    po = await getLegacyPoById(poId);
+    note = await getDeliveryNoteById(noteId);
     renderApprovalSection();
     return true;
   } catch (err) {
@@ -284,24 +292,24 @@ function buildPrintHtml() {
       <div class="dn-doc-title-bar">
         <div class="dn-doc-title">
           Delivery Note / ใบส่งมอบงาน
-          <span class="sub">${escapeHtml(po.contractorNickname || "")} — ${escapeHtml(po.vendorName || "")}</span>
+          <span class="sub">${escapeHtml(note.contractorNickname || "")} — ${escapeHtml(note.vendorName || "")}</span>
         </div>
         <div class="dn-doc-no">
           PO No. / เลขที่ PO
-          <b>${escapeHtml(po.poNumber || "-")}</b>
+          <b>${escapeHtml(note.poNumber || "-")}</b>
         </div>
       </div>
 
       <div class="dn-section-title">🗂️ PO Information / ข้อมูล PO</div>
       <table class="dn-table">
-        ${row2("Issue date<br>วันที่ออก", formatDateThai(po.issueDate), "Project<br>โปรเจกต์", val(po.project))}
-        ${row2("Total<br>มูลค่ารวม", `<b>฿${po.totalAmount != null ? Number(po.totalAmount).toLocaleString("th-TH") : "-"}</b>`, "Delivery date<br>วันที่ส่งมอบ", data.deliveryDate ? formatDateThai(data.deliveryDate) : dash)}
+        ${row2("Issue date<br>วันที่ออก", formatDateThai(note.issueDate), "Project<br>โปรเจกต์", val(note.project))}
+        ${row2("Total<br>มูลค่ารวม", `<b>฿${note.totalAmount != null ? Number(note.totalAmount).toLocaleString("th-TH") : "-"}</b>`, "Delivery date<br>วันที่ส่งมอบ", data.deliveryDate ? formatDateThai(data.deliveryDate) : dash)}
       </table>
 
       ${photosSection}
 
       <div class="dn-section-title">✍️ Acceptance / การตรวจรับ (4 ขั้นตอน)</div>
-      ${renderApprovalStepper(ensureApproval(po.approval), { lang: "all", escapeHtml })}
+      ${renderApprovalStepper(ensureApproval(note.approval), { lang: "all", escapeHtml })}
     </div>
   `;
 }

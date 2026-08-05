@@ -1175,7 +1175,7 @@ function renderLegacyPoTable() {
       <td><span class="cat-badge" style="background:#f1f5f9; color:#334155;">${escapeHtml(p.status || "")}</span></td>
       <td style="white-space:nowrap;">
         <button class="btn btn-outline btn-sm legacy-po-view-btn" data-id="${p.id}" title="View / ดู / 查看">👁️</button><br>
-        <a class="btn btn-outline btn-sm" href="delivery-note.html?id=${p.id}" target="_blank" rel="noopener" title="Delivery note / ใบส่งมอบงาน / 交付单" style="white-space:nowrap; margin-top:4px; display:inline-block;">📦 ใบส่งมอบงาน${(p.deliveryPhotos || []).length ? ` (${p.deliveryPhotos.length})` : ""}</a>
+        <a class="btn btn-outline btn-sm" href="delivery-notes-list.html?poId=${p.id}" target="_blank" rel="noopener" title="Delivery notes / ใบส่งมอบงาน (ส่งได้หลายใบ) / 交付单" style="white-space:nowrap; margin-top:4px; display:inline-block;">📦 ใบส่งมอบงาน${p.deliveryNoteCount ? ` (${p.deliveryNoteCount})` : ""}</a>
       </td>
     </tr>`
     )
