@@ -574,6 +574,11 @@ tbody tr:hover { background: var(--primary-light); }
   display:flex; align-items:center; justify-content:center; font-size: 17px; color: var(--text-muted);
 }
 
+/* ลิงก์เลขที่ PO/ใบส่งมอบงานในตารางเบิกงวดงาน — คลิกเพื่อเปิดดูเอกสาร PO ต้นทางแบบอ่านอย่างเดียว */
+.claim-po-link { color: var(--primary); text-decoration: underline; cursor: pointer; }
+.claim-po-link:hover { color: var(--primary-dark, var(--primary)); }
+.claim-po-link-disabled { color: inherit; text-decoration: none; cursor: default; }
+
 /* ป้ายประเภทงานสีตามหมวด — อ่านง่ายกว่าตัวหนังสือธรรมดา */
 .cat-badge {
   display:inline-flex; align-items:center; gap:6px;

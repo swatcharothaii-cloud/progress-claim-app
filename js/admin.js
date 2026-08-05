@@ -466,7 +466,7 @@ function renderTable(list) {
         <td>${escapeHtml(c.workItem || "")}</td>
         <td>${
           c.poNumber || c.sourceJobNo
-            ? `${c.poNumber ? `🧾 ${escapeHtml(c.poNumber)}` : ""}${c.poNumber && c.sourceJobNo ? "<br>" : ""}${c.sourceJobNo ? `📦 ${escapeHtml(c.sourceJobNo)}` : ""}`
+            ? `<span class="claim-po-link${c.sourceJobId ? "" : " claim-po-link-disabled"}" data-id="${c.id}" title="${T.btnViewPo.th}">${c.poNumber ? `🧾 ${escapeHtml(c.poNumber)}` : ""}${c.poNumber && c.sourceJobNo ? "<br>" : ""}${c.sourceJobNo ? `📦 ${escapeHtml(c.sourceJobNo)}` : ""}</span>`
             : `<span class="hint">-</span>`
         }</td>
         <td>${c.progressPercent ?? 0}%</td>
@@ -474,6 +474,7 @@ function renderTable(list) {
         <td>${formatDateThai(c.claimDate)}</td>
         <td><span class="cat-badge" style="background:${style.bg}; color:${style.text};"><span class="dot" style="background:${style.dot};"></span>${claimStatusTri(c.status)}</span>${stepHint}</td>
         <td>
+          <button class="btn btn-outline btn-sm view-claim-btn" data-id="${c.id}" title="${T.btnViewClaim.th}">👁️</button>
           <button class="btn btn-outline btn-sm edit-claim-btn" data-id="${c.id}">✏️</button>
           ${approval.status === APPROVAL_STATUS.IN_PROGRESS ? `<button class="btn btn-outline btn-sm approve-btn" data-id="${c.id}" title="${T.btnApprove.th}">✅</button>` : ""}
           ${approval.status === APPROVAL_STATUS.IN_PROGRESS ? `<button class="btn btn-outline btn-sm reject-btn" data-id="${c.id}" title="${T.btnReject.th}">❌</button>` : ""}
@@ -489,6 +490,12 @@ function renderTable(list) {
       const c = allClaims.find((x) => x.id === img.dataset.id);
       openLightbox(c.images, 0);
     });
+  });
+  tbody.querySelectorAll(".claim-po-link").forEach((el) => {
+    el.addEventListener("click", () => openClaimSourcePo(el.dataset.id));
+  });
+  tbody.querySelectorAll(".view-claim-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openClaimView(btn.dataset.id));
   });
   tbody.querySelectorAll(".edit-claim-btn").forEach((btn) => {
     btn.addEventListener("click", () => openClaimModal(allClaims.find((x) => x.id === btn.dataset.id)));
@@ -814,6 +821,127 @@ document.getElementById("cj-view-print-btn").addEventListener("click", () => {
   showToast(T.pdfPrintHint.th);
   setTimeout(() => window.print(), 300);
 });
+
+// ============================================================
+//  PROGRESS CLAIM — เอกสารใบเบิกงวดงาน (ดูรายละเอียด + สถานะอนุมัติ + พิมพ์/PDF)
+// ============================================================
+function buildClaimPrintHtml(c) {
+  const style = statusStyle(c.status);
+  const dash = `<span class="dn-empty-note">-</span>`;
+  const val = (v) => (v === null || v === undefined || v === "" ? dash : escapeHtml(String(v)));
+
+  const row2 = (labelA, valueA, labelB, valueB) => `
+    <tr>
+      <td class="dn-label">${labelA}</td>
+      <td class="dn-value">${valueA}</td>
+      <td class="dn-label-2">${labelB}</td>
+      <td class="dn-value">${valueB}</td>
+    </tr>`;
+  const rowFull = (label, value) => `
+    <tr>
+      <td class="dn-label">${label}</td>
+      <td class="dn-value dn-full" colspan="3">${value}</td>
+    </tr>`;
+
+  const poRefValue = c.poNumber || c.sourceJobNo ? `${val(c.poNumber)}${c.sourceJobNo ? ` (${val(c.sourceJobNo)})` : ""}` : dash;
+
+  const photosSection = (c.images || []).length
+    ? `<div class="dn-section-title">📷 Site photos / รูปภาพหน้างาน</div>
+       <div class="dn-photos-wrap">
+         <div class="dn-photos-grid">
+           ${(c.images || []).map((img) => `<img class="print-thumb" src="${img.url}">`).join("")}
+         </div>
+       </div>`
+    : "";
+
+  return `
+    <div class="print-report-header">
+      ${COMPANY?.logo ? `<img src="${COMPANY.logo}">` : ""}
+      <div class="titles">
+        <h1>${escapeHtml(COMPANY?.nameTh || "")}</h1>
+        <div class="sub">${escapeHtml(COMPANY?.nameEn || "")}</div>
+      </div>
+    </div>
+
+    <div class="dn-doc">
+      <div class="dn-doc-title-bar">
+        <div class="dn-doc-title">
+          ${T.claimDocTitle.en} / ${T.claimDocTitle.th}
+          <span class="sub">${escapeHtml(c.workItem || "")}</span>
+        </div>
+        <div class="dn-doc-no">
+          Claim No. / เลขที่เอกสาร
+          <b>${escapeHtml(c.claimId || "-")}</b>
+          <span class="dn-status-badge" style="background:${style.bg}; color:${style.text};">${claimStatusTri(c.status)}</span>
+        </div>
+      </div>
+
+      <div class="dn-section-title">🗂️ Claim Information / ข้อมูลใบเบิกงวด</div>
+      <table class="dn-table">
+        ${row2("Project<br>โปรเจกต์", val(c.project), "Work item<br>รายการงาน", val(c.workItem))}
+        ${row2("PO / Delivery ref<br>อ้างอิง PO/ใบส่งมอบงาน", poRefValue, "Claim date<br>วันที่เบิก", c.claimDate ? formatDateThai(c.claimDate) : dash)}
+      </table>
+
+      <div class="dn-section-title">📊 Progress &amp; Amount / ความคืบหน้าและจำนวนเงิน</div>
+      <table class="dn-table">
+        ${row2("Progress<br>ความคืบหน้า", `<b>${c.progressPercent ?? 0}%</b>`, "Claim amount<br>จำนวนเงินที่เบิก", `<b>฿${formatMoney(c.claimAmount)}</b>`)}
+        ${c.poAmount != null ? row2("PO amount<br>มูลค่า PO เต็ม", `฿${formatMoney(c.poAmount)}`, "&nbsp;", "&nbsp;") : ""}
+      </table>
+
+      ${c.notes ? `<div class="dn-section-title">📝 Notes / หมายเหตุ</div><div style="padding:14px; white-space:pre-wrap; font-size:13px; color:#334155;">${escapeHtml(c.notes)}</div>` : ""}
+
+      ${photosSection}
+
+      <div class="dn-section-title">✍️ Acceptance / การอนุมัติ (4 ขั้นตอน)</div>
+      ${renderApprovalStepper(ensureApproval(c.approval), { lang: "all", escapeHtml })}
+    </div>
+  `;
+}
+
+let claimViewingId = null;
+function openClaimView(id) {
+  const c = allClaims.find((x) => x.id === id);
+  if (!c) return;
+  claimViewingId = id;
+  document.getElementById("claim-view-title").textContent = `${T.claimDocTitle.en} / ${T.claimDocTitle.th} — ${c.claimId || ""}`;
+  document.getElementById("claim-view-body").innerHTML = buildClaimPrintHtml(c);
+  document.getElementById("claim-view-modal").style.display = "flex";
+  document.querySelectorAll("#claim-view-body .print-thumb").forEach((img, idx) => {
+    img.style.cursor = "zoom-in";
+    img.addEventListener("click", () => openLightbox(c.images, idx));
+  });
+}
+function closeClaimView() {
+  document.getElementById("claim-view-modal").style.display = "none";
+  claimViewingId = null;
+}
+document.getElementById("close-claim-view-modal").addEventListener("click", closeClaimView);
+document.getElementById("claim-view-close-btn").addEventListener("click", closeClaimView);
+document.getElementById("claim-view-print-btn").addEventListener("click", () => {
+  if (!claimViewingId) return;
+  const c = allClaims.find((x) => x.id === claimViewingId);
+  if (!c) return;
+  document.getElementById("print-report").innerHTML = buildClaimPrintHtml(c);
+  setPrintPage("portrait", 10); // ใบเบิกงวดงาน = เอกสารเดี่ยว พิมพ์แนวตั้ง A4
+  showToast(T.pdfPrintHint.th);
+  setTimeout(() => window.print(), 300);
+});
+
+// เปิดดู PO/แหล่งอ้างอิงของใบเบิกงวด (contractorJobs หรือ legacyPurchaseOrders) จากปุ่มในตาราง
+function openClaimSourcePo(claimId) {
+  const c = allClaims.find((x) => x.id === claimId);
+  if (!c || !c.sourceJobId) return;
+  const sourceType = c.sourceType || (c.sourceJobId ? "job" : "");
+  if (sourceType === "legacy") {
+    const found = allLegacyPOs.find((x) => x.id === c.sourceJobId);
+    if (!found) { showToast(T.poRefNotLinked.th); return; }
+    openLegacyPoView(c.sourceJobId);
+  } else {
+    const found = allContractorJobs.find((x) => x.id === c.sourceJobId);
+    if (!found) { showToast(T.poRefNotLinked.th); return; }
+    openContractorJobView(c.sourceJobId);
+  }
+}
 
 // ============================================================
 //  LEGACY PURCHASE ORDER ARCHIVE (นำเข้าจาก PEAK ครั้งเดียว)
@@ -1284,6 +1412,15 @@ function closeLegacyPoView() {
 }
 document.getElementById("close-legacy-po-view-modal").addEventListener("click", closeLegacyPoView);
 document.getElementById("legacy-po-view-close-btn").addEventListener("click", closeLegacyPoView);
+document.getElementById("legacy-po-view-print-btn").addEventListener("click", () => {
+  if (!legacyPoViewingId) return;
+  const p = allLegacyPOs.find((x) => x.id === legacyPoViewingId);
+  if (!p) return;
+  document.getElementById("print-report").innerHTML = buildLegacyPoDetailHtml(p);
+  setPrintPage("portrait", 10);
+  showToast(T.pdfPrintHint.th);
+  setTimeout(() => window.print(), 300);
+});
 document.getElementById("legacy-po-reassign-select").addEventListener("change", async (e) => {
   if (!legacyPoViewingId) return;
   const proj = allProjects.find((p) => p.id === e.target.value);

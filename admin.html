@@ -280,6 +280,21 @@
   </div>
 </div>
 
+<!-- ============ PROGRESS CLAIM VIEW MODAL (read-only + print) ============ -->
+<div class="modal-overlay" id="claim-view-modal" style="display:none;">
+  <div class="modal-sheet" style="max-width:900px;">
+    <div class="modal-header">
+      <h3 id="claim-view-title">Progress Claim / ใบเบิกงวดงาน / 工程款申请单</h3>
+      <button class="icon-btn" id="close-claim-view-modal">✕</button>
+    </div>
+    <div id="claim-view-body"></div>
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+      <button class="btn btn-outline" id="claim-view-close-btn">Close / ปิด / 关闭</button>
+      <button class="btn btn-primary" id="claim-view-print-btn">🖨️ Print / พิมพ์ / 打印</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ LEGACY PO VIEW MODAL ============ -->
 <div class="modal-overlay" id="legacy-po-view-modal" style="display:none;">
   <div class="modal-sheet" style="max-width:760px;">
@@ -315,6 +330,7 @@
       </div>
       <div style="display:flex; gap:10px;">
         <button class="btn btn-sm" id="legacy-po-delete-btn" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5;">🗑️ Delete / ลบ / 删除</button>
+        <button class="btn btn-outline btn-sm" id="legacy-po-view-print-btn">🖨️ Print / พิมพ์ / 打印</button>
         <button class="btn btn-outline" id="legacy-po-view-close-btn">Close / ปิด / 关闭</button>
       </div>
     </div>

@@ -58,6 +58,12 @@ export const T = {
   btnViewJob: tri("👁️ View", "👁️ ดูรายละเอียด", "👁️ 查看详情"),
   deliveryNoteTitle: tri("Job Delivery Note", "ใบส่งมอบงาน", "工程交付单"),
   btnPrintDeliveryNote: tri("🖨️ Print delivery note", "🖨️ พิมพ์ใบส่งมอบงาน", "🖨️ 打印交付单"),
+
+  // ---------- เอกสารใบเบิกงวดงาน (Progress Claim document / print view) ----------
+  claimDocTitle: tri("Progress Claim Document", "ใบเบิกงวดงาน", "工程款申请单"),
+  btnViewClaim: tri("👁️ View", "👁️ ดูใบเบิกงวด", "👁️ 查看申请单"),
+  btnViewPo: tri("View PO / ดู PO / 查看PO", "View PO / ดู PO / 查看PO", "View PO / ดู PO / 查看PO"),
+  poRefNotLinked: tri("PO reference not linked to a system record", "เลขที่ PO นี้ไม่ได้เชื่อมกับข้อมูลในระบบ (พิมพ์เอง)", "此PO号未关联系统记录（手动输入）"),
 };
 
 export function claimStatusTri(status) {
