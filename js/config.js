@@ -60,6 +60,10 @@ export const IMAGE_TARGET_BASE64_BYTES = 140 * 1024;
 export const MAX_IMAGES = 5;
 export const MAX_IMAGE_MB = 5;
 
+// ไฟล์ PDF ใบสั่งซื้อ (PO) — ค่าเดียวกับ repair-app (ต้องแก้พร้อมกันทั้ง 2 ที่) เก็บเป็น base64 ตรงใน
+// Firestore เช่นเดียวกับรูปภาพ (ไม่ใช้ Storage) จึงต้องจำกัดขนาดไฟล์ดิบไว้ล่วงหน้า
+export const PO_FILE_MAX_BYTES = 650 * 1024; // ~650KB ไฟล์ดิบ (~890KB หลังแปลงเป็น base64)
+
 // ============================================================
 //  6) งานที่ส่งให้ผู้รับเหมา (Contractor Jobs) — ใช้ Firestore collection "contractorJobs"
 //  ร่วมกับ repair-app ตัวเดียวกัน (ดูค่าคงที่ตัวเดียวกันนี้ใน repair-app/js/config.js — ต้องแก้ไข

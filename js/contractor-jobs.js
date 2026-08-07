@@ -6,9 +6,9 @@
 // ขอบเขตของไฟล์นี้ (ตามที่ตกลงกับผู้ใช้งาน): ดูรายการทั้งหมด + กำหนด/แก้ไขเลขที่ PO + ตรวจรับงาน
 // (ผ่าน/ไม่ผ่าน) ได้จากหน้านี้เลย ส่วนการ "สร้างงานส่งให้ผู้รับเหมา" และ "ตอบรับ/เสนอราคาของผู้รับเหมา"
 // ยังคงทำที่ repair-app เท่านั้น (ยังไม่มีความจำเป็นต้องย้ายมาที่นี่)
-import { db, collection, doc, getDoc, updateDoc, onSnapshot, query, orderBy, serverTimestamp } from "./firebase-init.js";
-import { CONTRACTOR_JOBS_COLLECTION } from "./firebase-init.js";
-import { CONTRACTOR_JOB_STATUS } from "./config.js";
+import { db, collection, doc, addDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "./firebase-init.js";
+import { CONTRACTOR_JOBS_COLLECTION, LEGACY_PO_COLLECTION } from "./firebase-init.js";
+import { CONTRACTOR_JOB_STATUS, CONTRACTOR_JOB_TYPE, PO_FILE_MAX_BYTES } from "./config.js";
 import { createFreshApproval, approveApprovalStep, rejectApprovalStep, APPROVAL_STATUS } from "./approval.js";
 
 // สถานะระบบต่อรองราคา (negotiation.status บนเอกสาร contractorJobs) — ใช้แสดงผลอย่างเดียวในแอปนี้
@@ -38,6 +38,99 @@ export async function setPoNumber(id, poNumber) {
     poNumber: (poNumber || "").trim(),
     updatedAt: serverTimestamp(),
   });
+}
+
+// ============================================================
+//  แนบไฟล์ PDF ใบสั่งซื้อ (PO) + เชื่อมข้อมูลเข้าคลัง "Purchase Order Archive (PEAK Import)" ด้านล่าง
+//  (เหมือนกับฝั่ง repair-app ทุกประการ — ต้องแก้พร้อมกันทั้ง 2 ที่ถ้ามีการเปลี่ยนแปลง)
+// ============================================================
+function readPoFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = () => reject(new Error("อ่านไฟล์ PDF ไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function todayIsoDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// แอดมินออก/แก้ไขเลขที่ PO พร้อมแนบ (หรือลบ) ไฟล์ PDF ใบสั่งซื้อได้ในคราวเดียว
+export async function setPoNumberWithFile(id, poNumber, file, removeFile) {
+  if (file) {
+    if (file.type !== "application/pdf") {
+      throw new Error("แนบได้เฉพาะไฟล์ PDF เท่านั้น / Only PDF files can be attached");
+    }
+    if (file.size > PO_FILE_MAX_BYTES) {
+      throw new Error(
+        `ไฟล์ใหญ่เกินไป (สูงสุด ${Math.round(PO_FILE_MAX_BYTES / 1024)}KB เพราะเก็บตรงใน Firestore ไม่ใช้ Storage) / File too large (max ${Math.round(PO_FILE_MAX_BYTES / 1024)}KB)`
+      );
+    }
+  }
+  const patch = { poNumber: (poNumber || "").trim() };
+  if (file) {
+    patch.poFileName = file.name;
+    patch.poFileData = await readPoFileAsDataUrl(file);
+    patch.poFileSize = file.size;
+    patch.poFileUploadedAt = serverTimestamp();
+  } else if (removeFile) {
+    patch.poFileName = "";
+    patch.poFileData = "";
+    patch.poFileSize = null;
+  }
+  await updateDoc(doc(db, CONTRACTOR_JOBS_COLLECTION, id), { ...patch, updatedAt: serverTimestamp() });
+
+  const snap = await getDoc(doc(db, CONTRACTOR_JOBS_COLLECTION, id));
+  const job = snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  if (job) await syncContractorJobPoToArchive(job);
+}
+
+async function syncContractorJobPoToArchive(job) {
+  if (!job.poFileData) {
+    if (job.linkedLegacyPoId) {
+      try {
+        await deleteDoc(doc(db, LEGACY_PO_COLLECTION, job.linkedLegacyPoId));
+      } catch (e) {
+        console.warn("ลบรายการที่เคยเชื่อมไว้ในคลัง PO เก่าไม่สำเร็จ (ข้ามไป):", e);
+      }
+      await updateDoc(doc(db, CONTRACTOR_JOBS_COLLECTION, job.id), { linkedLegacyPoId: "" });
+    }
+    return;
+  }
+  const amount = job.type === CONTRACTOR_JOB_TYPE.QUOTE ? job.quotePrice : job.repairPrice;
+  const archiveFields = {
+    poNumber: job.poNumber || "",
+    project: job.project || "",
+    projectId: job.projectId || "",
+    contractorNickname: job.contractorName || "",
+    totalAmount: amount ?? null,
+    notes: `Auto-linked from repair-app job ${job.jobId || job.id}${job.ticketId ? ` (ticket #${job.ticketId})` : ""} / เชื่อมข้อมูลอัตโนมัติจากงาน ${job.jobId || job.id} ใน repair-app`,
+    importBatch: "repair_app_link",
+    contractorJobId: job.id,
+    poFileName: job.poFileName || "",
+    poFileData: job.poFileData || "",
+    poFileSize: job.poFileSize || null,
+  };
+  if (job.linkedLegacyPoId) {
+    await updateDoc(doc(db, LEGACY_PO_COLLECTION, job.linkedLegacyPoId), archiveFields);
+  } else {
+    const ref = await addDoc(collection(db, LEGACY_PO_COLLECTION), {
+      ...archiveFields,
+      vendorName: "",
+      issueDate: todayIsoDate(),
+      status: "เชื่อมจาก Repair App / Linked from Repair App",
+      lineItems: [],
+      vatAmount: null,
+      whtAmount: null,
+      netPayable: null,
+      rawProjectText: "",
+      createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, CONTRACTOR_JOBS_COLLECTION, job.id), { linkedLegacyPoId: ref.id });
+  }
 }
 
 // ---- ตรวจรับงานที่ผู้รับเหมาส่งมอบมา — ระบบอนุมัติ 4 ขั้นตอน (ทีมงาน/PM/จัดซื้อ/ผู้บริหาร) ----

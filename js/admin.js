@@ -8,7 +8,7 @@ import { loadAdmins, addAdmin, updateAdmin } from "./admins.js";
 import { T, claimStatusTri, jobTypeTri, contractorJobStatusTri } from "./i18n.js";
 import { loadProjects, addProject, updateProject } from "./projects.js";
 import { addClaim, resubmitClaim, watchAllClaims, deleteClaim, approveClaimStep, rejectClaimStep } from "./claims.js";
-import { watchAllContractorJobs, setPoNumber, approveJobDeliveryStep, rejectJobDeliveryStep, NEGOTIATION_STATUS } from "./contractor-jobs.js";
+import { watchAllContractorJobs, setPoNumberWithFile, approveJobDeliveryStep, rejectJobDeliveryStep, NEGOTIATION_STATUS } from "./contractor-jobs.js";
 import {
   importLegacyPurchaseOrders,
   importLegacyPurchaseOrderRecords,
@@ -588,8 +588,13 @@ function renderContractorJobsTable() {
 
       let deliveryCell = `<span class="hint">-</span>`;
       if (j.status === CONTRACTOR_JOB_STATUS.CONFIRMED || j.status === CONTRACTOR_JOB_STATUS.DONE) {
+        const poFileBadge = j.poFileData
+          ? ` <a href="${j.poFileData}" download="${escapeHtml(j.poFileName || "PO.pdf")}" target="_blank" rel="noopener" title="📎 ${escapeHtml(j.poFileName || "PO.pdf")}">📎</a>`
+          : "";
         const poLine = j.poNumber
-          ? `<div class="hint" style="font-weight:600;">🧾 ${escapeHtml(j.poNumber)} <button class="btn btn-outline btn-sm cj-set-po-btn" data-id="${j.id}" style="padding:1px 6px; font-size:11px;">✏️</button></div>`
+          ? `<div class="hint" style="font-weight:600;">🧾 ${escapeHtml(j.poNumber)}${poFileBadge} <button class="btn btn-outline btn-sm cj-set-po-btn" data-id="${j.id}" style="padding:1px 6px; font-size:11px;">✏️</button></div>${
+              j.poFileData ? `<div class="hint" style="color:#1e40af;">🔗 In PEAK Archive / อยู่ในคลัง PEAK</div>` : ""
+            }`
           : `<button class="btn btn-outline btn-sm cj-set-po-btn" data-id="${j.id}">${T.btnSetPoNumber.en} / ${T.btnSetPoNumber.th}</button>`;
         const photoCountBadge = (j.deliveryImages || []).length ? ` 🖼️${j.deliveryImages.length}` : "";
         const roundBadge = j.inspectionRound
@@ -631,20 +636,7 @@ function renderContractorJobsTable() {
     .join("");
 
   tbody.querySelectorAll(".cj-set-po-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      const j = allContractorJobs.find((x) => x.id === id);
-      if (!j) return;
-      const poNumber = prompt(`${T.promptSetPoNumber.en} / ${T.promptSetPoNumber.th}`, j.poNumber || "");
-      if (poNumber === null) return;
-      try {
-        await setPoNumber(id, poNumber);
-        showToast(T.msgSaved.th);
-      } catch (e) {
-        console.error(e);
-        showToast(T.msgSavedFail.th);
-      }
-    });
+    btn.addEventListener("click", () => openSetPoModal(btn.dataset.id));
   });
   tbody.querySelectorAll(".cj-pass-delivery-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -836,6 +828,57 @@ document.getElementById("cj-view-print-btn").addEventListener("click", () => {
   setPrintPage("portrait", 10); // ใบส่งมอบงาน = เอกสารเดี่ยว พิมพ์แนวตั้ง A4
   showToast(T.pdfPrintHint.th);
   setTimeout(() => window.print(), 300);
+});
+
+// ---------------- แนบไฟล์ PDF ใบสั่งซื้อ (PO) + เชื่อมข้อมูลเข้าคลัง PEAK Archive ด้านล่าง ----------------
+// (เหมือนกับฝั่ง repair-app ทุกประการ — แก้ไข contractorJobs เอกสารเดียวกัน)
+let cjSetPoJobId = "";
+function openSetPoModal(id) {
+  const j = allContractorJobs.find((x) => x.id === id);
+  if (!j) return;
+  cjSetPoJobId = id;
+  document.getElementById("cj-po-number-input").value = j.poNumber || "";
+  document.getElementById("cj-po-file-input").value = "";
+  document.getElementById("cj-po-remove-file-checkbox").checked = false;
+  const currentFileEl = document.getElementById("cj-po-current-file");
+  const removeWrap = document.getElementById("cj-po-remove-file-wrap");
+  if (j.poFileData) {
+    currentFileEl.innerHTML = `📎 Current file / ไฟล์ปัจจุบัน: <a href="${j.poFileData}" download="${escapeHtml(j.poFileName || "PO.pdf")}" target="_blank" rel="noopener">${escapeHtml(j.poFileName || "PO.pdf")}</a>`;
+    removeWrap.style.display = "flex";
+  } else {
+    currentFileEl.textContent = "";
+    removeWrap.style.display = "none";
+  }
+  document.getElementById("cj-set-po-modal").style.display = "flex";
+}
+function closeSetPoModal() {
+  document.getElementById("cj-set-po-modal").style.display = "none";
+  cjSetPoJobId = "";
+}
+document.getElementById("close-cj-set-po-modal").addEventListener("click", closeSetPoModal);
+document.getElementById("cancel-cj-set-po-btn").addEventListener("click", closeSetPoModal);
+document.getElementById("save-cj-set-po-btn").addEventListener("click", async () => {
+  if (!cjSetPoJobId) return;
+  const poNumber = document.getElementById("cj-po-number-input").value.trim();
+  if (!poNumber) {
+    showToast("Please enter a PO number / กรุณากรอกเลขที่ PO");
+    return;
+  }
+  const fileInput = document.getElementById("cj-po-file-input");
+  const file = (fileInput.files && fileInput.files[0]) || null;
+  const removeFile = document.getElementById("cj-po-remove-file-checkbox").checked;
+  const btn = document.getElementById("save-cj-set-po-btn");
+  btn.disabled = true;
+  try {
+    await setPoNumberWithFile(cjSetPoJobId, poNumber, file, removeFile);
+    showToast(T.msgSaved.th);
+    closeSetPoModal();
+  } catch (e) {
+    console.error(e);
+    showToast(e.message || T.msgSavedFail.th);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ============================================================
@@ -1310,7 +1353,7 @@ function renderLegacyPoTable() {
     .map(
       (p) => `
     <tr>
-      <td>${escapeHtml(p.poNumber || "")}</td>
+      <td>${escapeHtml(p.poNumber || "")}${p.importBatch === "repair_app_link" ? `<div class="hint" style="color:#1e40af;">🔧 Repair App</div>` : ""}</td>
       <td>${formatDateThai(p.issueDate)}</td>
       <td>${escapeHtml(p.project || "")}</td>
       <td>${escapeHtml(p.contractorNickname || "")}</td>
@@ -1320,6 +1363,7 @@ function renderLegacyPoTable() {
       <td style="white-space:nowrap;">
         <button class="btn btn-outline btn-sm legacy-po-view-btn" data-id="${p.id}" title="View / ดู / 查看">👁️</button><br>
         <a class="btn btn-outline btn-sm" href="delivery-notes-list.html?poId=${p.id}" target="_blank" rel="noopener" title="Delivery notes / ใบส่งมอบงาน (ส่งได้หลายใบ) / 交付单" style="white-space:nowrap; margin-top:4px; display:inline-block;">📦 ใบส่งมอบงาน${p.deliveryNoteCount ? ` (${p.deliveryNoteCount})` : ""}</a>
+        ${p.poFileData ? `<a class="btn btn-outline btn-sm" href="${p.poFileData}" download="${escapeHtml(p.poFileName || "PO.pdf")}" target="_blank" rel="noopener" title="📎 ${escapeHtml(p.poFileName || "PO.pdf")}" style="white-space:nowrap; margin-top:4px; display:inline-block;">📎 PDF</a>` : ""}
       </td>
     </tr>`
     )
@@ -1386,6 +1430,15 @@ function buildLegacyPoDetailHtml(p) {
           <td class="dn-value">฿${p.whtAmount != null ? Number(p.whtAmount).toLocaleString("th-TH") : "-"}</td>
         </tr>
       </table>
+      ${
+        p.poFileData
+          ? `<div class="dn-section-title">📎 Attached PO File / ไฟล์ใบสั่งซื้อที่แนบ</div>
+             <div style="padding:14px;">
+               <a class="btn btn-outline btn-sm" href="${p.poFileData}" download="${escapeHtml(p.poFileName || "PO.pdf")}" target="_blank" rel="noopener">📎 ${escapeHtml(p.poFileName || "PO.pdf")}</a>
+               ${p.importBatch === "repair_app_link" ? `<span class="hint" style="margin-left:8px;">🔗 Auto-linked from repair-app / เชื่อมข้อมูลอัตโนมัติจาก repair-app</span>` : ""}
+             </div>`
+          : ""
+      }
       ${
         p.notes
           ? `<div class="dn-section-title">📝 Notes / หมายเหตุ (รวมข้อมูลบัญชีธนาคาร)</div>

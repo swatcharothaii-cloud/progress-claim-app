@@ -281,6 +281,34 @@
   </div>
 </div>
 
+<!-- ============ SET PO NUMBER + ATTACH PDF MODAL ============ -->
+<div class="modal-overlay" id="cj-set-po-modal" style="display:none;">
+  <div class="modal-sheet" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>🧾 Set PO Number / กรอกเลขที่ PO / 填写PO号</h3>
+      <button class="icon-btn" id="close-cj-set-po-modal">✕</button>
+    </div>
+    <div class="field">
+      <label>PO Number * / เลขที่ PO * / PO号 *</label>
+      <input type="text" id="cj-po-number-input" placeholder="e.g. PO.L7-2607066">
+    </div>
+    <div class="field">
+      <label>Attach PO PDF (optional) / แนบไฟล์ PDF ใบสั่งซื้อ (ไม่บังคับ) / 附上PO的PDF文件（可选）</label>
+      <div id="cj-po-current-file" class="hint" style="margin-bottom:6px;"></div>
+      <input type="file" id="cj-po-file-input" accept="application/pdf">
+      <p class="hint" style="margin-top:6px;">📎 Once a PDF is attached, this PO will also appear in "📜 Purchase Order Archive (PEAK Import)" below / เมื่อแนบไฟล์แล้ว PO นี้จะไปปรากฏใน "📜 คลังใบสั่งซื้อเก่าจาก PEAK" ด้านล่างด้วย / 附上PDF后，此PO也会出现在下方的"PEAK采购单存档"中</p>
+      <p class="hint" style="margin-top:2px;">Max ~650KB (stored directly in the database, no file storage service used) / ขนาดไฟล์สูงสุดประมาณ 650KB (เก็บตรงในฐานข้อมูล ไม่ได้ใช้บริการเก็บไฟล์แยก) / 最大约650KB（直接存储在数据库中，未使用文件存储服务）</p>
+      <label style="display:none; align-items:center; gap:6px; margin-top:8px; font-size:13px;" id="cj-po-remove-file-wrap">
+        <input type="checkbox" id="cj-po-remove-file-checkbox"> Remove attached PDF / ลบไฟล์ที่แนบไว้ / 移除已附加的PDF
+      </label>
+    </div>
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+      <button class="btn btn-outline" id="cancel-cj-set-po-btn">Cancel / ยกเลิก / 取消</button>
+      <button class="btn btn-primary" id="save-cj-set-po-btn">Save / บันทึก / 保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ PROGRESS CLAIM VIEW MODAL (read-only + print) ============ -->
 <div class="modal-overlay" id="claim-view-modal" style="display:none;">
   <div class="modal-sheet" style="max-width:900px;">
