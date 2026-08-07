@@ -11,6 +11,14 @@ import { CONTRACTOR_JOBS_COLLECTION } from "./firebase-init.js";
 import { CONTRACTOR_JOB_STATUS } from "./config.js";
 import { createFreshApproval, approveApprovalStep, rejectApprovalStep, APPROVAL_STATUS } from "./approval.js";
 
+// สถานะระบบต่อรองราคา (negotiation.status บนเอกสาร contractorJobs) — ใช้แสดงผลอย่างเดียวในแอปนี้
+// (การกด "ยอมรับ/ต่อรอง" ทำได้จากฝั่ง repair-app เท่านั้น ตามขอบเขตของไฟล์นี้ที่ตกลงกันไว้ด้านบน)
+export const NEGOTIATION_STATUS = {
+  AWAITING_ADMIN: "awaiting_admin",
+  AWAITING_CONTRACTOR: "awaiting_contractor",
+  AGREED: "agreed",
+};
+
 // subscribe งานผู้รับเหมาทั้งหมด (ใหม่สุดก่อน) — ใช้ค่าเดียวกันไม่ว่าจะเปิดจากแอปไหน
 export function watchAllContractorJobs(cb, onErr) {
   const q = query(collection(db, CONTRACTOR_JOBS_COLLECTION), orderBy("createdAt", "desc"));

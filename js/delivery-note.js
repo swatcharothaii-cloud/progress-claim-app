@@ -92,9 +92,10 @@ function renderApprovalSection() {
   const approveBtn = document.getElementById("dn-approve-step-btn");
   if (approveBtn) {
     approveBtn.addEventListener("click", async () => {
+      const approveComment = prompt(`Comment (optional) / คอมเมนต์ (ถ้ามี):`, "") || "";
       if (!confirm(`Approve this step as "${currentAdmin?.name}"? / ยืนยันอนุมัติขั้นตอนนี้ในนาม "${currentAdmin?.name}"?`)) return;
       try {
-        note.approval = await approveDeliveryNoteStep(noteId, currentAdmin?.name, "");
+        note.approval = await approveDeliveryNoteStep(noteId, currentAdmin?.name, approveComment);
         showToast("บันทึกแล้ว / Saved / 已保存");
         renderApprovalSection();
       } catch (e) {

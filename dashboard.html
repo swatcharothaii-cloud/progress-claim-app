@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard / แดชบอร์ดสรุปข้อมูล / 数据仪表盘</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="brand-bar brand-bar--admin" id="brand-bar"></div>
+
+<div class="admin-shell">
+
+  <div class="admin-topbar">
+    <div>
+      <h2 style="margin:0;">📊 Dashboard / แดชบอร์ดสรุปข้อมูล / 数据仪表盘</h2>
+      <div class="hint">Overview across all projects, updated in real time / ภาพรวมทุกโปรเจกต์ อัปเดตแบบเรียลไทม์ / 所有项目总览，实时更新</div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a href="admin.html" class="btn btn-outline btn-sm">← Back to admin / กลับหน้าแอดมิน / 返回管理页</a>
+    </div>
+  </div>
+
+  <div id="loading-state" class="hint" style="padding:60px 0; text-align:center; font-size:15px;">Loading… / กำลังโหลด… / 加载中…</div>
+
+  <div id="dash-body" style="display:none;">
+
+    <div class="stat-grid" id="dash-stat-grid"></div>
+
+    <div class="chart-card">
+      <h3 style="margin:0 0 14px;">📁 ยอดเบิกงวดงาน แยกตามโปรเจกต์และสถานะ / Claims by Project &amp; Status / 按项目和状态分类的申请金额</h3>
+      <div style="position:relative; height:340px;">
+        <canvas id="chart-by-project"></canvas>
+      </div>
+      <div id="chart-by-project-empty" class="hint" style="display:none; text-align:center; padding:30px 0;">No data yet / ยังไม่มีข้อมูล / 暂无数据</div>
+    </div>
+
+    <div class="chart-card">
+      <h3 style="margin:0 0 14px;">📈 แนวโน้มยอดเบิกงวดงานรายเดือน / Monthly Trend / 月度趋势</h3>
+      <div style="position:relative; height:320px;">
+        <canvas id="chart-monthly"></canvas>
+      </div>
+      <div id="chart-monthly-empty" class="hint" style="display:none; text-align:center; padding:30px 0;">No data yet / ยังไม่มีข้อมูล / 暂无数据</div>
+    </div>
+
+    <div class="chart-card">
+      <h3 style="margin:0 0 4px;">✍️ สถานะขั้นตอนอนุมัติ (รวมทุกประเภทเอกสาร) / Approval Pipeline / 审批流程状态</h3>
+      <p class="hint" style="margin:0 0 14px;">Combines progress claims, PO delivery notes, and contractor job acceptance — all share the same 4-step chain / รวมใบเบิกงวดงาน ใบส่งมอบงาน PO และการตรวจรับงานผู้รับเหมา ซึ่งใช้ขั้นตอนอนุมัติ 4 ขั้นตอนเดียวกัน / 合并了工程款申请、PO交付单和承包商验收，三者共用同一套四步审批流程</p>
+      <div style="position:relative; height:320px;">
+        <canvas id="chart-approval"></canvas>
+      </div>
+      <div id="chart-approval-empty" class="hint" style="display:none; text-align:center; padding:30px 0;">No data yet / ยังไม่มีข้อมูล / 暂无数据</div>
+    </div>
+
+    <div class="chart-card">
+      <h3 style="margin:0 0 14px;">🧾 PO / ใบสั่งซื้อ และใบส่งมอบงาน / Purchase Orders &amp; Delivery Notes / 采购单与交付单</h3>
+      <div class="stat-grid" id="po-summary-grid" style="margin-bottom:18px;"></div>
+      <table id="po-status-table" style="width:100%;">
+        <thead>
+          <tr>
+            <th>Status / สถานะ</th>
+            <th style="text-align:right;">Count / จำนวนใบ</th>
+            <th style="text-align:right;">Total value / มูลค่ารวม</th>
+          </tr>
+        </thead>
+        <tbody id="po-status-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="chart-card">
+      <h3 style="margin:0 0 14px;">🔧 งานผู้รับเหมา / Contractor Jobs / 承包商工程</h3>
+      <div class="stat-grid" id="cj-summary-grid"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

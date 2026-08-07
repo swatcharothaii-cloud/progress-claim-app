@@ -8,7 +8,7 @@ import { loadAdmins, addAdmin, updateAdmin } from "./admins.js";
 import { T, claimStatusTri, jobTypeTri, contractorJobStatusTri } from "./i18n.js";
 import { loadProjects, addProject, updateProject } from "./projects.js";
 import { addClaim, resubmitClaim, watchAllClaims, deleteClaim, approveClaimStep, rejectClaimStep } from "./claims.js";
-import { watchAllContractorJobs, setPoNumber, approveJobDeliveryStep, rejectJobDeliveryStep } from "./contractor-jobs.js";
+import { watchAllContractorJobs, setPoNumber, approveJobDeliveryStep, rejectJobDeliveryStep, NEGOTIATION_STATUS } from "./contractor-jobs.js";
 import {
   importLegacyPurchaseOrders,
   importLegacyPurchaseOrderRecords,
@@ -520,9 +520,10 @@ async function approveClaimRow(id) {
   if (!c) return;
   const approval = ensureApproval(c.approval);
   const stepDef = APPROVAL_STEP_DEFS.find((d) => d.step === approval.currentStep);
+  const note = prompt(`Comment (optional) / คอมเมนต์ (ถ้ามี):`, "") || "";
   if (!confirm(`Approve step ${approval.currentStep}/4 (${stepDef?.labelTh}) as "${currentAdmin?.name}"? / ยืนยันอนุมัติขั้นตอนที่ ${approval.currentStep}/4 (${stepDef?.labelTh}) ในนาม "${currentAdmin?.name}"?`)) return;
   try {
-    await approveClaimStep(id, currentAdmin?.name, "");
+    await approveClaimStep(id, currentAdmin?.name, note);
     showToast(T.msgSaved.th);
   } catch (e) {
     console.error(e);
@@ -550,6 +551,20 @@ async function rejectClaimRow(id) {
 //  CONTRACTOR JOBS (PO / DELIVERY / INSPECTION) — ข้อมูลจาก repair-app โดยตรง
 //  อ่าน+แก้ไข collection "contractorJobs" เดียวกัน ไม่มีการกรอกข้อมูลซ้ำ
 // ============================================================
+// แสดงสถานะการต่อรองราคาแบบอ่านอย่างเดียว (กด "ยอมรับ/ต่อรอง" ได้จากฝั่ง repair-app เท่านั้น ตามขอบเขตของแอปนี้)
+function negotiationStatusLineHtml(j) {
+  const n = j.negotiation;
+  if (!n || !Array.isArray(n.offers) || !n.offers.length) return "";
+  const lastOffer = n.offers[n.offers.length - 1];
+  const priceText = lastOffer.price != null ? `฿${Number(lastOffer.price).toLocaleString("th-TH")}` : "-";
+  const daysText = lastOffer.days != null ? ` · ${lastOffer.days} วัน` : "";
+  if (n.status === NEGOTIATION_STATUS.AGREED) {
+    return `<div class="hint" style="margin-top:4px; color:#065f46; font-weight:600;">✅ ตกลงราคาแล้ว ${priceText}${daysText}</div>`;
+  }
+  const whoTurn = n.status === NEGOTIATION_STATUS.AWAITING_CONTRACTOR ? "รอผู้รับเหมา" : "รอทีมงาน (แก้ที่ repair-app)";
+  return `<div class="hint" style="margin-top:4px; color:#92400e;">🤝 กำลังต่อรอง ${priceText}${daysText} — ${whoTurn}</div>`;
+}
+
 function renderContractorJobsTable() {
   const tbody = document.getElementById("cj-tbody");
   const emptyState = document.getElementById("empty-cj-state");
@@ -599,7 +614,7 @@ function renderContractorJobsTable() {
         } else if (j.inspectionRound > 0) {
           deliveryLine = `<div class="hint" style="margin-top:4px; color:#991b1b;">❌ ${T.msgInspectionFailedResubmit.th}</div>${roundBadge}`;
         }
-        deliveryCell = poLine + deliveryLine;
+        deliveryCell = poLine + deliveryLine + negotiationStatusLineHtml(j);
       }
 
       return `
@@ -638,9 +653,10 @@ function renderContractorJobsTable() {
       if (!j) return;
       const approval = ensureApproval(j.approval);
       const stepDef = APPROVAL_STEP_DEFS.find((d) => d.step === approval.currentStep);
+      const note = prompt(`Comment (optional) / คอมเมนต์ (ถ้ามี):`, "") || "";
       if (!confirm(`Approve step ${approval.currentStep}/4 (${stepDef?.labelTh}) for job "${j.jobId || id}" as "${currentAdmin?.name}"? / ยืนยันอนุมัติขั้นตอนที่ ${approval.currentStep}/4 (${stepDef?.labelTh}) ของงาน "${j.jobId || id}" ในนาม "${currentAdmin?.name}"?`)) return;
       try {
-        await approveJobDeliveryStep(id, currentAdmin?.name, "");
+        await approveJobDeliveryStep(id, currentAdmin?.name, note);
         showToast(T.msgSaved.th);
       } catch (e) {
         console.error(e);
@@ -1572,6 +1588,15 @@ function jobFullAmount(job) {
   return null;
 }
 
+// ราคาของงานนี้ "นิ่งแล้ว" หรือยัง — งาน quote/fix ที่ยังอยู่ระหว่างต่อรองราคา (negotiation.status ไม่ใช่ "agreed")
+// ไม่ควรถูกใช้เป็นฐานคำนวณยอดเบิกงวดงาน เพราะราคาอาจเปลี่ยนได้อีก งานประเภทอื่น (defect ไม่มีราคา) หรืองานเก่า
+// ก่อนมีระบบต่อรองราคา (ไม่มี negotiation object เลย) ถือว่าราคานิ่งแล้วตามเดิม
+function isJobPriceFinal(j) {
+  if (j.type !== CONTRACTOR_JOB_TYPE.QUOTE && j.type !== CONTRACTOR_JOB_TYPE.FIX) return true;
+  if (!j.negotiation) return true;
+  return j.negotiation.status === NEGOTIATION_STATUS.AGREED;
+}
+
 // อ่านยอดเงิน PO ปัจจุบันจากช่องกรอกโดยตรง (ตอนนี้แก้ไขเองได้แล้ว ไม่ได้ล็อกตามที่เลือกจาก dropdown
 // เพียงอย่างเดียวอีกต่อไป) — ตัดสัญลักษณ์ ฿ / คอมมา ออกก่อนแปลงเป็นตัวเลข
 function getPoAmountFromField() {
@@ -1622,10 +1647,11 @@ function refreshSourceJobOptions(selectedType, selectedId, projectId) {
     html +=
       `<optgroup label="📦 จากงานผู้รับเหมาในระบบ / From contractor job / 来自承包商工作">` +
       jobs
-        .map(
-          (j) =>
-            `<option value="job:${j.id}">🧾 ${escapeHtml(j.poNumber)} · 📦 ${escapeHtml(j.jobId || "")} · ${escapeHtml(j.project || "")} — ${escapeHtml((j.description || "").slice(0, 40))}</option>`
-        )
+        .map((j) => {
+          const final = isJobPriceFinal(j);
+          const label = `🧾 ${escapeHtml(j.poNumber)} · 📦 ${escapeHtml(j.jobId || "")} · ${escapeHtml(j.project || "")} — ${escapeHtml((j.description || "").slice(0, 40))}`;
+          return `<option value="job:${j.id}"${final ? "" : " disabled"}>${label}${final ? "" : " — ⏳ กำลังต่อรองราคา ยังเลือกไม่ได้ / price still being negotiated"}</option>`;
+        })
         .join("") +
       `</optgroup>`;
   }
@@ -1664,6 +1690,11 @@ function applySourceJobSelection() {
   if (type === "job") {
     const job = allContractorJobs.find((j) => j.id === id);
     if (!job) return;
+    if (!isJobPriceFinal(job)) {
+      showToast("ราคางานนี้ยังต่อรองไม่จบ กรุณารอให้ตกลงราคาก่อน / Price still being negotiated for this job");
+      document.getElementById("c-source-job").value = "";
+      return;
+    }
     document.getElementById("c-po-number").value = job.poNumber || "";
     document.getElementById("c-job-no").value = job.jobId || "";
     const workItemEl = document.getElementById("c-workItem");

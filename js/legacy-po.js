@@ -280,6 +280,18 @@ export async function getDeliveryNoteById(id) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
+// ติดตามใบส่งมอบงานทั้งหมดของทุก PO แบบเรียลไทม์ — ใช้โดยหน้า Dashboard สรุปข้อมูลภาพรวม
+export function watchAllDeliveryNotes(cb, onErr) {
+  return onSnapshot(
+    collection(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      console.error(err);
+      if (onErr) onErr(err);
+    }
+  );
+}
+
 // บันทึกเนื้อหาใบส่งมอบงานใบนี้ (รูปภาพ/วันที่ส่งมอบ/หมายเหตุ) — แก้ไขแล้วเริ่มอนุมัติใหม่ตั้งแต่ขั้นตอนที่ 1 เสมอ
 export async function updateDeliveryNote(id, data, updatedBy) {
   await updateDoc(doc(db, LEGACY_PO_DELIVERY_NOTES_COLLECTION, id), {
