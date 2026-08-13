@@ -85,6 +85,9 @@ export async function importLegacyPurchaseOrderRecords(records, onProgress, impo
 
 // เพิ่ม PO เก่าทีละใบเองจากหน้าแอดมิน (ปุ่ม "✏️ Add PO Manually") — ใช้ตอนมีแค่ใบเดียว (เช่น อ่านจาก
 // ไฟล์ PDF ที่แปลงเป็น Excel/ตัวเลขไม่ได้อัตโนมัติ) เตือน (ไม่บล็อก) ถ้าเลขที่ PO+ช่างประจำซ้ำกับที่มีอยู่แล้ว
+// data.poFileName/poFileData/poFileSize (ไม่บังคับ): ไฟล์รูป/PDF ต้นฉบับที่แนบมาด้วย — ใช้ตอนเพิ่มผ่านปุ่ม
+// "📷 Scan PO (Photo/PDF)" ซึ่งสแกนด้วย OCR แล้วเติมฟอร์มนี้ให้อัตโนมัติก่อนแอดมินตรวจสอบ/กดบันทึก (ดู po-scan.js)
+// data.scanned: true = สร้างมาจากการสแกน (ใช้แยก badge ในตารางคลัง PO เก่า ดู renderLegacyPoTable ใน admin.js)
 export async function addLegacyPoManual(data) {
   let projectId = "";
   if (data.project) {
@@ -111,7 +114,10 @@ export async function addLegacyPoManual(data) {
     rawProjectText: "",
     projectId,
     project: data.project || "",
-    importBatch: "manual",
+    importBatch: data.scanned ? "ocr_scan" : "manual",
+    poFileName: data.poFileName || "",
+    poFileData: data.poFileData || "",
+    poFileSize: data.poFileSize ?? null,
     createdAt: serverTimestamp(),
   });
   return ref.id;

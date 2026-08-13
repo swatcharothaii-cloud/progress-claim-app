@@ -1,5 +1,5 @@
 import {
-  COMPANY, CLAIM_STATUS, MAX_IMAGES, MAX_IMAGE_MB,
+  COMPANY, CLAIM_STATUS, MAX_IMAGES, MAX_IMAGE_MB, PO_FILE_MAX_BYTES,
   CONTRACTOR_JOB_TYPE, CONTRACTOR_JOB_TYPE_STYLE, CONTRACTOR_JOB_STATUS, CONTRACTOR_JOB_STATUS_STYLE,
   OTHER_APP_URL,
 } from "./config.js";
@@ -7,6 +7,7 @@ import { renderCompanyBrandBar, showToast, formatDateThai, formatMoney, escapeHt
 import { loadAdmins, addAdmin, updateAdmin } from "./admins.js";
 import { T, claimStatusTri, jobTypeTri, contractorJobStatusTri } from "./i18n.js";
 import { loadProjects, addProject, updateProject } from "./projects.js";
+import { mergeProjectsGroup } from "./project-merge.js";
 import { addClaim, resubmitClaim, watchAllClaims, deleteClaim, approveClaimStep, rejectClaimStep } from "./claims.js";
 import { watchAllContractorJobs, setPoNumberWithFile, approveJobDeliveryStep, rejectJobDeliveryStep, NEGOTIATION_STATUS } from "./contractor-jobs.js";
 import {
@@ -21,6 +22,7 @@ import {
   bulkUpdateLegacyPoContractorNameByNickname,
 } from "./legacy-po.js";
 import { compressImageToDataUrl } from "./image-compress.js";
+import { ocrPoDocument, guessPoFieldsFromText, readFileAsDataUrl as readScanFileAsDataUrl } from "./po-scan.js";
 import { ensureApproval, renderApprovalStepper, APPROVAL_STATUS, APPROVAL_STEP_DEFS } from "./approval.js";
 
 renderCompanyBrandBar("brand-bar", COMPANY);
@@ -194,6 +196,49 @@ async function main() {
     showToast(T.msgSaved.th);
   });
 
+  // ---------------- รวมโปรเจกต์ที่ซ้ำกัน (เช่น "Plus City Condo" + "Plus City Park" → "Plus City") ----------------
+  document.getElementById("proj-merge-btn").addEventListener("click", async () => {
+    const checked = Array.from(document.querySelectorAll(".proj-merge-checkbox:checked")).map((cb) => cb.dataset.id);
+    const targetLabel = document.getElementById("proj-merge-target-label").value.trim();
+    const resultEl = document.getElementById("proj-merge-result");
+    if (checked.length < 2) {
+      showToast("Tick at least 2 projects to merge / ติ๊กเลือกอย่างน้อย 2 โปรเจกต์");
+      return;
+    }
+    if (!targetLabel) {
+      showToast(T.msgFillRequired.th);
+      return;
+    }
+    const sourceProjects = checked.map((id) => allProjects.find((p) => p.id === id)).filter(Boolean);
+    const names = sourceProjects.map((p) => p.label).join('", "');
+    if (
+      !confirm(
+        `Merge "${names}" into "${targetLabel}"? All historical data will be moved over and the other project(s) will be disabled. This can't be undone. / ยืนยันรวม "${names}" เป็น "${targetLabel}"? ข้อมูลเก่าทั้งหมดจะถูกย้ายมาให้ และโปรเจกต์อื่นที่เหลือจะถูกปิดใช้งาน กู้คืนไม่ได้`
+      )
+    ) {
+      return;
+    }
+    const btn = document.getElementById("proj-merge-btn");
+    btn.disabled = true;
+    resultEl.textContent = "Merging... / กำลังรวมข้อมูล...";
+    try {
+      const result = await mergeProjectsGroup(sourceProjects, targetLabel);
+      await refreshProjects();
+      document.getElementById("proj-merge-target-label").value = "";
+      const summary = Object.entries(result.counts)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
+      document.getElementById("proj-merge-result").textContent = `✅ Merged into "${result.survivorLabel}" — records updated: ${summary || "0"}`;
+      showToast(T.msgSaved.th);
+    } catch (e) {
+      console.error(e);
+      resultEl.textContent = "";
+      showToast(e.message || T.msgSavedFail.th);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   document.getElementById("admin-add-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const nameInput = document.getElementById("admin-name");
@@ -282,6 +327,7 @@ function renderProjectManageList() {
     .map(
       (p) => `
     <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border);" data-proj-id="${p.id}">
+      <input type="checkbox" class="proj-merge-checkbox" data-id="${p.id}" title="Tick to include in merge / ติ๊กเพื่อรวมโปรเจกต์นี้">
       <input type="color" class="proj-color-input" value="${p.color || "#4f46e5"}" data-field="color" style="width:34px; height:30px; padding:2px; flex-shrink:0;">
       <input type="text" class="proj-label-input" value="${escapeHtml(p.label)}" data-field="label" style="flex:1; min-width:120px; padding:6px 8px; border:1px solid var(--border); border-radius:8px;">
       <button class="btn btn-outline btn-sm save-proj-btn" data-id="${p.id}">Save / บันทึก / 保存</button>
@@ -1271,28 +1317,51 @@ document.getElementById("excel-import-confirm-btn").addEventListener("click", as
 
 // ============================================================
 //  ADD PO MANUALLY — เพิ่มใบสั่งซื้อเก่าทีละใบ (เช่น อ่านค่าจากไฟล์ PDF แล้วพิมพ์กรอกเอง)
+//  หรือให้ระบบ "สแกน" รูป/PDF ให้อัตโนมัติด้วย OCR ฟรีในเบราว์เซอร์ก่อน (ปุ่ม "📷 Scan PO") แล้วเปิดฟอร์ม
+//  เดียวกันนี้ขึ้นมาพร้อมค่าที่เดาไว้ให้ตรวจสอบ/แก้ไขก่อนบันทึก (ดู po-scan.js)
 // ============================================================
-function openManualPoModal() {
-  document.getElementById("mp-po-number").value = "";
-  document.getElementById("mp-project").value = "";
-  document.getElementById("mp-contractor").value = "";
-  document.getElementById("mp-vendor").value = "";
-  document.getElementById("mp-date").value = "";
-  document.getElementById("mp-status").value = "";
-  document.getElementById("mp-total").value = "";
-  document.getElementById("mp-vat").value = "";
-  document.getElementById("mp-wht").value = "";
-  document.getElementById("mp-net").value = "";
-  document.getElementById("mp-notes").value = "";
+let scanAttachment = null; // { name, dataUrl, size } — ไฟล์ต้นฉบับที่สแกน แนบไปกับรายการที่จะบันทึกด้วย (ถ้ามี)
+
+// prefill (ไม่บังคับ): { guesses, rawText, imageDataUrl, attachment } — ส่งมาจากขั้นตอนสแกน (ดูด้านล่าง)
+function openManualPoModal(prefill) {
+  const g = (prefill && prefill.guesses) || {};
+  document.getElementById("mp-po-number").value = g.poNumber || "";
+  document.getElementById("mp-project").value = g.project || "";
+  document.getElementById("mp-contractor").value = g.contractorNickname || "";
+  document.getElementById("mp-vendor").value = g.vendorName || "";
+  document.getElementById("mp-date").value = g.issueDate || "";
+  document.getElementById("mp-status").value = g.status || "";
+  document.getElementById("mp-total").value = g.totalAmount != null ? g.totalAmount : "";
+  document.getElementById("mp-vat").value = g.vatAmount != null ? g.vatAmount : "";
+  document.getElementById("mp-wht").value = g.whtAmount != null ? g.whtAmount : "";
+  document.getElementById("mp-net").value = g.netPayable != null ? g.netPayable : "";
+  document.getElementById("mp-notes").value = g.notes || "";
   document.getElementById("mp-project-options").innerHTML = allProjects
     .map((p) => `<option value="${escapeHtml(p.label)}"></option>`)
     .join("");
+
+  const banner = document.getElementById("mp-scan-banner");
+  const previewWrap = document.getElementById("mp-scan-preview-wrap");
+  const rawWrap = document.getElementById("mp-scan-rawtext-wrap");
+  if (prefill) {
+    banner.style.display = "block";
+    previewWrap.style.display = "block";
+    document.getElementById("mp-scan-preview-img").src = prefill.imageDataUrl || "";
+    rawWrap.style.display = "block";
+    document.getElementById("mp-scan-rawtext").textContent = prefill.rawText || "(no text detected / ไม่พบข้อความ)";
+    scanAttachment = prefill.attachment || null;
+  } else {
+    banner.style.display = "none";
+    previewWrap.style.display = "none";
+    rawWrap.style.display = "none";
+    scanAttachment = null;
+  }
   document.getElementById("manual-po-modal").style.display = "flex";
 }
 function closeManualPoModal() {
   document.getElementById("manual-po-modal").style.display = "none";
 }
-document.getElementById("add-legacy-po-manual-btn").addEventListener("click", openManualPoModal);
+document.getElementById("add-legacy-po-manual-btn").addEventListener("click", () => openManualPoModal());
 document.getElementById("close-manual-po-modal").addEventListener("click", closeManualPoModal);
 document.getElementById("cancel-manual-po-btn").addEventListener("click", closeManualPoModal);
 
@@ -1326,7 +1395,12 @@ document.getElementById("save-manual-po-btn").addEventListener("click", async ()
       whtAmount: document.getElementById("mp-wht").value !== "" ? Number(document.getElementById("mp-wht").value) : null,
       netPayable: document.getElementById("mp-net").value !== "" ? Number(document.getElementById("mp-net").value) : null,
       notes: document.getElementById("mp-notes").value.trim(),
+      scanned: !!scanAttachment,
+      poFileName: scanAttachment?.name || "",
+      poFileData: scanAttachment?.dataUrl || "",
+      poFileSize: scanAttachment?.size ?? null,
     });
+    scanAttachment = null;
     await refreshProjects();
     showToast(T.msgSaved.th);
     closeManualPoModal();
@@ -1335,6 +1409,54 @@ document.getElementById("save-manual-po-btn").addEventListener("click", async ()
     showToast(T.msgSavedFail.th);
   } finally {
     btn.disabled = false;
+  }
+});
+
+// ---------------- 📷 Scan PO (Photo/PDF) — OCR ฟรีในเบราว์เซอร์ แล้วเปิดฟอร์มด้านบนพร้อมค่าที่เดาไว้ ----------------
+document.getElementById("scan-po-btn").addEventListener("click", () => {
+  document.getElementById("scan-po-file-input").click();
+});
+document.getElementById("scan-po-file-input").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ""; // เคลียร์ไว้ เผื่อเลือกไฟล์เดิมซ้ำได้อีกครั้งในอนาคต
+  if (!file) return;
+  if (file.type !== "application/pdf" && !file.type.startsWith("image/")) {
+    showToast("รองรับเฉพาะไฟล์รูปภาพหรือ PDF / Only image or PDF files are supported");
+    return;
+  }
+  const statusEl = document.getElementById("scan-po-status");
+  const scanBtn = document.getElementById("scan-po-btn");
+  scanBtn.disabled = true;
+  statusEl.textContent = "กำลังเตรียมสแกน... / Preparing scan...";
+  try {
+    const { rawText, imageDataUrl } = await ocrPoDocument(file, (pct, status) => {
+      statusEl.textContent = `${status || "Scanning"}${pct != null ? ` ${pct}%` : ""} / กำลังสแกน...`;
+    });
+    const knownLabels = allProjects.map((p) => p.label);
+    const guesses = guessPoFieldsFromText(rawText, knownLabels);
+
+    // แนบไฟล์ต้นฉบับไปกับรายการที่จะบันทึกด้วย (บีบอัดถ้าเป็นรูป, เช็คขนาดถ้าเป็น PDF — ดู PO_FILE_MAX_BYTES)
+    let attachment = null;
+    if (file.type.startsWith("image/")) {
+      const dataUrl = await compressImageToDataUrl(file);
+      attachment = { name: file.name, dataUrl, size: dataUrl.length };
+    } else if (file.size <= PO_FILE_MAX_BYTES) {
+      const dataUrl = await readScanFileAsDataUrl(file);
+      attachment = { name: file.name, dataUrl, size: file.size };
+    } else {
+      showToast(
+        `ไฟล์ PDF ใหญ่เกินไป จึงไม่แนบไฟล์ไว้ (แต่ยังเติมข้อมูลที่อ่านได้ให้) / PDF too large to attach (max ${Math.round(PO_FILE_MAX_BYTES / 1024)}KB) — fields were still filled from the scan`
+      );
+    }
+
+    openManualPoModal({ guesses, rawText, imageDataUrl, attachment });
+    showToast("สแกนเสร็จแล้ว กรุณาตรวจสอบข้อมูลก่อนบันทึก / Scan complete — please review before saving");
+  } catch (err) {
+    console.error(err);
+    showToast("สแกนไม่สำเร็จ / Scan failed: " + (err.message || "unknown error"));
+  } finally {
+    scanBtn.disabled = false;
+    statusEl.textContent = "";
   }
 });
 
@@ -1353,7 +1475,7 @@ function renderLegacyPoTable() {
     .map(
       (p) => `
     <tr>
-      <td>${escapeHtml(p.poNumber || "")}${p.importBatch === "repair_app_link" ? `<div class="hint" style="color:#1e40af;">🔧 Repair App</div>` : ""}</td>
+      <td>${escapeHtml(p.poNumber || "")}${p.importBatch === "repair_app_link" ? `<div class="hint" style="color:#1e40af;">🔧 Repair App</div>` : ""}${p.importBatch === "ocr_scan" ? `<div class="hint" style="color:#7c3aed;">📷 Scanned</div>` : ""}</td>
       <td>${formatDateThai(p.issueDate)}</td>
       <td>${escapeHtml(p.project || "")}</td>
       <td>${escapeHtml(p.contractorNickname || "")}</td>
@@ -1436,6 +1558,7 @@ function buildLegacyPoDetailHtml(p) {
              <div style="padding:14px;">
                <a class="btn btn-outline btn-sm" href="${p.poFileData}" download="${escapeHtml(p.poFileName || "PO.pdf")}" target="_blank" rel="noopener">📎 ${escapeHtml(p.poFileName || "PO.pdf")}</a>
                ${p.importBatch === "repair_app_link" ? `<span class="hint" style="margin-left:8px;">🔗 Auto-linked from repair-app / เชื่อมข้อมูลอัตโนมัติจาก repair-app</span>` : ""}
+               ${p.importBatch === "ocr_scan" ? `<span class="hint" style="margin-left:8px;">📷 Created from OCR scan — please double-check fields / สร้างจากการสแกน OCR กรุณาตรวจสอบข้อมูลอีกครั้ง</span>` : ""}
              </div>`
           : ""
       }

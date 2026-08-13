@@ -61,6 +61,16 @@
       </form>
       <div id="project-manage-list"></div>
       <p class="hint" style="margin-top:12px;">รายชื่อโปรเจกต์ใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบ</p>
+
+      <div id="project-merge-tool" style="margin-top:16px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border); border-radius:12px;">
+        <div style="font-weight:600; margin-bottom:8px;">🔀 Merge Duplicate Projects / รวมโปรเจกต์ที่ซ้ำกัน / 合并重复项目</div>
+        <p class="hint">Tick 2 or more projects above that are actually the same place, then type the name to merge them into below (type a brand-new name, or match one of the ticked projects' names exactly to keep using that name). All historical data — repair tickets, contractor jobs/POs, PEAK archive, progress claims — gets moved over automatically. This can't be undone (merged-away projects are disabled, not deleted). / ติ๊กเลือกโปรเจกต์ด้านบนตั้งแต่ 2 รายการขึ้นไปที่จริงๆ แล้วเป็นที่เดียวกัน แล้วพิมพ์ชื่อที่จะรวมเป็นด้านล่างนี้ (ตั้งชื่อใหม่ก็ได้ หรือพิมพ์ให้ตรงกับชื่อของโปรเจกต์ที่ติ๊กไว้อันหนึ่งเพื่อคงชื่อนั้นไว้) ข้อมูลเก่าทั้งหมด — งานแจ้งซ่อม/งานผู้รับเหมา-PO/คลัง PEAK/ใบเบิกงวดงาน — จะถูกย้ายมาให้อัตโนมัติ กู้คืนไม่ได้ (โปรเจกต์ที่ถูกรวมทิ้งจะถูกปิดใช้งาน ไม่ได้ลบถาวร)</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+          <input type="text" id="proj-merge-target-label" placeholder="Target name / ชื่อที่จะรวมเป็น" style="flex:1; min-width:200px;">
+          <button type="button" class="btn btn-primary btn-sm" id="proj-merge-btn">🔀 Merge selected / รวมที่เลือกไว้</button>
+        </div>
+        <p class="hint" id="proj-merge-result" style="margin-top:8px;"></p>
+      </div>
     </div>
   </details>
 
@@ -108,8 +118,12 @@
       <button class="btn btn-primary btn-sm" id="import-legacy-po-btn">📥 Import from PEAK / นำเข้าจาก PEAK / 从PEAK导入</button>
       <button class="btn btn-outline btn-sm" id="import-legacy-po-excel-btn">📤 Import from Excel / นำเข้าจากไฟล์ Excel / 从Excel导入</button>
       <button class="btn btn-outline btn-sm" id="add-legacy-po-manual-btn">✏️ Add PO Manually / เพิ่ม PO เอง / 手动添加PO</button>
+      <button class="btn btn-outline btn-sm" id="scan-po-btn">📷 Scan PO (Photo/PDF) / สแกน PO จากรูป/PDF / 扫描PO（照片/PDF）</button>
+      <input type="file" id="scan-po-file-input" accept="image/*,application/pdf" style="display:none">
       <span class="hint" id="legacy-po-import-status"></span>
+      <span class="hint" id="scan-po-status"></span>
     </div>
+    <p class="hint" style="margin-top:-6px;">📷 สแกน PO ด้วยการแนบรูปถ่ายหรือไฟล์ PDF — ระบบจะอ่านข้อความด้วย OCR ฟรีในเบราว์เซอร์แล้วลองเติมฟอร์มให้อัตโนมัติ (ฟรี ไม่มีค่าใช้จ่าย แต่ความแม่นยำจำกัด โดยเฉพาะภาษาไทยจากรูปถ่าย) กรุณาตรวจสอบทุกฟิลด์ก่อนบันทึกเสมอ / Scan a PO by attaching a photo or PDF — the system reads it with free in-browser OCR and tries to auto-fill the form (free, but limited accuracy, especially for Thai text from photos). Always review every field before saving.</p>
     <div class="table-wrap">
       <table>
         <thead>
@@ -419,6 +433,17 @@
       <button class="icon-btn" id="close-manual-po-modal">✕</button>
     </div>
     <p class="hint">ใช้เพิ่มใบสั่งซื้อเก่าทีละใบ เช่น อ่านค่าจากไฟล์ PDF แล้วพิมพ์กรอกเอง / Use this to add a single legacy PO — e.g. read the values off a PDF and type them in here.</p>
+
+    <div id="mp-scan-banner" class="hint" style="display:none; background:#dbeafe; border:1px solid #93c5fd; color:#1e40af; padding:10px 12px; border-radius:10px; margin-bottom:10px;">
+      🔍 Auto-filled from a scanned document using free OCR — please double-check every field before saving (Thai OCR from photos can misread characters) / กรอกอัตโนมัติจากเอกสารที่สแกนด้วย OCR ฟรี — กรุณาตรวจสอบทุกฟิลด์ก่อนบันทึก (OCR ภาษาไทยจากรูปถ่ายมีโอกาสอ่านผิดได้) / 已使用免费OCR从扫描文档自动填写——保存前请仔细核对每个字段
+    </div>
+    <div id="mp-scan-preview-wrap" style="display:none; margin-bottom:10px;">
+      <img id="mp-scan-preview-img" style="max-width:100%; max-height:280px; border-radius:10px; border:1px solid var(--border); display:block;">
+    </div>
+    <details id="mp-scan-rawtext-wrap" style="display:none; margin-bottom:10px;">
+      <summary style="cursor:pointer; font-size:12.5px; color:var(--text-muted);">📄 View raw OCR text / ดูข้อความดิบที่สแกนได้ / 查看原始OCR文本</summary>
+      <pre id="mp-scan-rawtext" style="white-space:pre-wrap; font-size:11.5px; background:#f8fafc; padding:10px; border-radius:8px; max-height:200px; overflow:auto; margin-top:6px;"></pre>
+    </details>
 
     <div class="field">
       <label>PO Number * / เลขที่ PO * / PO单号 *</label>
