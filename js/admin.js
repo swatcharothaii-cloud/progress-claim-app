@@ -7,9 +7,9 @@ import { renderCompanyBrandBar, showToast, formatDateThai, formatMoney, escapeHt
 import { loadAdmins, addAdmin, updateAdmin } from "./admins.js";
 import { T, claimStatusTri, jobTypeTri, contractorJobStatusTri } from "./i18n.js";
 import { loadProjects, addProject, updateProject } from "./projects.js";
-import { mergeProjectsGroup } from "./project-merge.js";
+import { mergeProjectsGroup, findExactDuplicateGroups, autoMergeExactDuplicateProjects } from "./project-merge.js";
 import { addClaim, resubmitClaim, watchAllClaims, deleteClaim, approveClaimStep, rejectClaimStep } from "./claims.js";
-import { watchAllContractorJobs, setPoNumberWithFile, approveJobDeliveryStep, rejectJobDeliveryStep, NEGOTIATION_STATUS } from "./contractor-jobs.js";
+import { watchAllContractorJobs, setPoNumberWithFile, approveJobDeliveryStep, rejectJobDeliveryStep, NEGOTIATION_STATUS, loadDeliveryPhotos } from "./contractor-jobs.js";
 import {
   importLegacyPurchaseOrders,
   importLegacyPurchaseOrderRecords,
@@ -229,6 +229,48 @@ async function main() {
         .map(([k, v]) => `${k}: ${v}`)
         .join(", ");
       document.getElementById("proj-merge-result").textContent = `✅ Merged into "${result.survivorLabel}" — records updated: ${summary || "0"}`;
+      showToast(T.msgSaved.th);
+    } catch (e) {
+      console.error(e);
+      resultEl.textContent = "";
+      showToast(e.message || T.msgSavedFail.th);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ---------------- รวมโปรเจกต์ "ชื่อซ้ำเป๊ะ" ให้อัตโนมัติ (ไม่ต้องติ๊กเลือกเอง) ----------------
+  document.getElementById("proj-auto-merge-btn").addEventListener("click", async () => {
+    const resultEl = document.getElementById("proj-auto-merge-result");
+    const btn = document.getElementById("proj-auto-merge-btn");
+    const activeProjects = allProjects.filter((p) => p.active !== false);
+    const groups = findExactDuplicateGroups(activeProjects);
+    if (!groups.length) {
+      resultEl.textContent = "ไม่พบชื่อโปรเจกต์ที่ซ้ำกันเป๊ะ / No exact-duplicate project names found.";
+      return;
+    }
+    const preview = groups.map((g) => `"${g.map((p) => p.label).join('" = "')}"`).join("\n");
+    if (
+      !confirm(
+        `พบชื่อซ้ำ ${groups.length} กลุ่ม จะรวมดังนี้:\n${preview}\n\nข้อมูลเก่าทั้งหมดจะถูกย้ายมาที่โปรเจกต์เดียวต่อกลุ่มโดยอัตโนมัติ กู้คืนไม่ได้ ต้องการดำเนินการต่อหรือไม่?\n\nFound ${groups.length} duplicate group(s), will merge as shown above. All historical data will be moved automatically per group — this can't be undone. Proceed?`
+      )
+    ) {
+      return;
+    }
+    btn.disabled = true;
+    resultEl.textContent = "กำลังรวมข้อมูล... / Merging...";
+    try {
+      const results = await autoMergeExactDuplicateProjects(groups);
+      await refreshProjects();
+      const summary = results
+        .map((r) => {
+          const counts = Object.entries(r.counts)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ");
+          return `✅ "${r.groupLabels.join('", "')}" → "${r.survivorLabel}" (${counts || "0"})`;
+        })
+        .join("\n");
+      resultEl.textContent = summary;
       showToast(T.msgSaved.th);
     } catch (e) {
       console.error(e);
@@ -642,7 +684,9 @@ function renderContractorJobsTable() {
               j.poFileData ? `<div class="hint" style="color:#1e40af;">🔗 In PEAK Archive / อยู่ในคลัง PEAK</div>` : ""
             }`
           : `<button class="btn btn-outline btn-sm cj-set-po-btn" data-id="${j.id}">${T.btnSetPoNumber.en} / ${T.btnSetPoNumber.th}</button>`;
-        const photoCountBadge = (j.deliveryImages || []).length ? ` 🖼️${j.deliveryImages.length}` : "";
+        // deliveryPhotoCount = ฟิลด์ใหม่ (นับจาก subcollection ตอนบันทึกฝั่ง repair-app) เอกสารเก่าก่อนแก้ไขจุดนี้ไม่มีฟิลด์นี้ จึง fallback ไปนับจาก deliveryImages เดิม
+        const cjPhotoCount = j.deliveryPhotoCount != null ? j.deliveryPhotoCount : (j.deliveryImages || []).length;
+        const photoCountBadge = cjPhotoCount ? ` 🖼️${cjPhotoCount}` : "";
         const roundBadge = j.inspectionRound
           ? `<div class="hint" style="margin-top:2px;">🔍 ${T.inspectionRoundLabel.th} ${j.inspectionRound}${j.lastInspectionResult === "failed" ? " ❌" : ""}</div>`
           : "";
@@ -746,7 +790,7 @@ function setPrintPage(orientation, marginMm = 10) {
   styleEl.textContent = `@media print { @page { size: A4 ${orientation}; margin: ${marginMm}mm; } }`;
 }
 
-function buildDeliveryNoteHtml(j) {
+function buildDeliveryNoteHtml(j, deliveryPhotos) {
   const typeStyle = CONTRACTOR_JOB_TYPE_STYLE[j.type] || CONTRACTOR_JOB_TYPE_STYLE[CONTRACTOR_JOB_TYPE.FIX];
   const statusStyle = CONTRACTOR_JOB_STATUS_STYLE[j.status] || CONTRACTOR_JOB_STATUS_STYLE[CONTRACTOR_JOB_STATUS.WAITING];
   const dash = `<span class="dn-empty-note">-</span>`;
@@ -782,11 +826,11 @@ function buildDeliveryNoteHtml(j) {
       <td class="dn-value dn-full" colspan="3">${value}</td>
     </tr>`;
 
-  const photosSection = (j.deliveryImages || []).length
+  const photosSection = (deliveryPhotos || []).length
     ? `<div class="dn-section-title">📷 Delivery photos / ภาพส่งมอบงาน</div>
        <div class="dn-photos-wrap">
          <div class="dn-photos-grid">
-           ${(j.deliveryImages || []).map((img) => `<img class="print-thumb" src="${img.url}">`).join("")}
+           ${deliveryPhotos.map((img) => `<img class="print-thumb" src="${img.url}">`).join("")}
          </div>
        </div>`
     : "";
@@ -848,16 +892,20 @@ function buildDeliveryNoteHtml(j) {
 }
 
 let cjViewingId = null;
-function openContractorJobView(id) {
+// async เพราะภาพส่งมอบงานเก็บแยกเป็น subcollection (ดู contractor-jobs.js) ต้องโหลดมาก่อนค่อยแสดง
+async function openContractorJobView(id) {
   const j = allContractorJobs.find((x) => x.id === id);
   if (!j) return;
   cjViewingId = id;
   document.getElementById("cj-view-title").textContent = `${T.deliveryNoteTitle.en} / ${T.deliveryNoteTitle.th} — ${j.jobId || ""}`;
-  document.getElementById("cj-view-body").innerHTML = buildDeliveryNoteHtml(j);
+  document.getElementById("cj-view-body").innerHTML = `<p class="hint">Loading photos... / กำลังโหลดรูปภาพ...</p>`;
   document.getElementById("cj-view-modal").style.display = "flex";
+  const deliveryPhotos = j.deliverySubmitted ? await loadDeliveryPhotos(id, j.deliveryImages) : [];
+  if (cjViewingId !== id) return; // ผู้ใช้ปิด/เปลี่ยนไปดูงานอื่นแล้วระหว่างรอโหลด
+  document.getElementById("cj-view-body").innerHTML = buildDeliveryNoteHtml(j, deliveryPhotos);
   document.querySelectorAll("#cj-view-body .print-thumb").forEach((img, idx) => {
     img.style.cursor = "zoom-in";
-    img.addEventListener("click", () => openLightbox(j.deliveryImages, idx));
+    img.addEventListener("click", () => openLightbox(deliveryPhotos, idx));
   });
 }
 function closeContractorJobView() {
@@ -866,11 +914,12 @@ function closeContractorJobView() {
 }
 document.getElementById("close-cj-view-modal").addEventListener("click", closeContractorJobView);
 document.getElementById("cj-view-close-btn").addEventListener("click", closeContractorJobView);
-document.getElementById("cj-view-print-btn").addEventListener("click", () => {
+document.getElementById("cj-view-print-btn").addEventListener("click", async () => {
   if (!cjViewingId) return;
   const j = allContractorJobs.find((x) => x.id === cjViewingId);
   if (!j) return;
-  document.getElementById("print-report").innerHTML = buildDeliveryNoteHtml(j);
+  const deliveryPhotos = j.deliverySubmitted ? await loadDeliveryPhotos(j.id, j.deliveryImages) : [];
+  document.getElementById("print-report").innerHTML = buildDeliveryNoteHtml(j, deliveryPhotos);
   setPrintPage("portrait", 10); // ใบส่งมอบงาน = เอกสารเดี่ยว พิมพ์แนวตั้ง A4
   showToast(T.pdfPrintHint.th);
   setTimeout(() => window.print(), 300);

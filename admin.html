@@ -62,6 +62,13 @@
       <div id="project-manage-list"></div>
       <p class="hint" style="margin-top:12px;">รายชื่อโปรเจกต์ใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบ</p>
 
+      <div id="project-auto-merge-tool" style="margin-top:16px; padding:12px 14px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:12px;">
+        <div style="font-weight:600; margin-bottom:8px;">🔍 Auto-merge Exact-Duplicate Names / รวมชื่อซ้ำอัตโนมัติ / 自动合并完全重名项目</div>
+        <p class="hint">Finds projects whose names match exactly (ignoring case and extra spaces — e.g. "Plus City" and "plus city ") and merges each group into one automatically. It will NOT catch similar-but-different names like "Plus City" vs "Plus City Condo" — use "Merge selected" below for those. All historical data gets moved over the same way; merged-away projects are disabled, not deleted. / ค้นหาโปรเจกต์ที่ชื่อตรงกันเป๊ะ (ไม่สนตัวพิมพ์เล็ก-ใหญ่และช่องว่างเกิน เช่น "Plus City" กับ "plus city ") แล้วรวมแต่ละกลุ่มให้อัตโนมัติ — จะไม่จับชื่อที่ "คล้ายกัน" แต่ไม่ตรงเป๊ะ เช่น "Plus City" กับ "Plus City Condo" กรณีนั้นใช้เครื่องมือ "Merge selected" ด้านล่างแทน ข้อมูลเก่าย้ายให้อัตโนมัติเหมือนกัน โปรเจกต์ที่ถูกรวมทิ้งจะถูกปิดใช้งาน ไม่ได้ลบถาวร</p>
+        <button type="button" class="btn btn-primary btn-sm" id="proj-auto-merge-btn">🔍 Find &amp; merge exact duplicates / ค้นหาและรวมชื่อซ้ำ</button>
+        <p class="hint" id="proj-auto-merge-result" style="margin-top:8px;"></p>
+      </div>
+
       <div id="project-merge-tool" style="margin-top:16px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border); border-radius:12px;">
         <div style="font-weight:600; margin-bottom:8px;">🔀 Merge Duplicate Projects / รวมโปรเจกต์ที่ซ้ำกัน / 合并重复项目</div>
         <p class="hint">Tick 2 or more projects above that are actually the same place, then type the name to merge them into below (type a brand-new name, or match one of the ticked projects' names exactly to keep using that name). All historical data — repair tickets, contractor jobs/POs, PEAK archive, progress claims — gets moved over automatically. This can't be undone (merged-away projects are disabled, not deleted). / ติ๊กเลือกโปรเจกต์ด้านบนตั้งแต่ 2 รายการขึ้นไปที่จริงๆ แล้วเป็นที่เดียวกัน แล้วพิมพ์ชื่อที่จะรวมเป็นด้านล่างนี้ (ตั้งชื่อใหม่ก็ได้ หรือพิมพ์ให้ตรงกับชื่อของโปรเจกต์ที่ติ๊กไว้อันหนึ่งเพื่อคงชื่อนั้นไว้) ข้อมูลเก่าทั้งหมด — งานแจ้งซ่อม/งานผู้รับเหมา-PO/คลัง PEAK/ใบเบิกงวดงาน — จะถูกย้ายมาให้อัตโนมัติ กู้คืนไม่ได้ (โปรเจกต์ที่ถูกรวมทิ้งจะถูกปิดใช้งาน ไม่ได้ลบถาวร)</p>

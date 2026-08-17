@@ -94,3 +94,50 @@ export async function mergeProjectsGroup(sourceProjects, targetLabel) {
 
   return { survivorId: survivor.id, survivorLabel: label, counts };
 }
+
+// ---------------- รวมโปรเจกต์ "ชื่อซ้ำเป๊ะ" ให้อัตโนมัติ (ไม่ต้องติ๊กเลือกเอง) ----------------
+// จับคู่เฉพาะชื่อที่เขียนตรงกันเป๊ะหลังตัดช่องว่างหัวท้าย/ยุบช่องว่างซ้ำ และไม่สนตัวพิมพ์เล็ก-ใหญ่
+// (เช่น "Plus City" กับ "plus city " ถือว่าซ้ำกัน) — ไม่ครอบคลุมชื่อที่ "คล้ายกัน" แต่ไม่ตรงกันเป๊ะ
+// (เช่น "Plus City" vs "Plus City Condo" หรือ "PST" vs "PST Condo") กรณีนั้นต้องใช้เครื่องมือ
+// "Merge selected" ด้านบน (ติ๊กเลือกเองแล้วตั้งชื่อปลายทาง) เหมือนเดิม
+//
+// projects: รายการโปรเจกต์ทั้งหมด (ควรกรองเอาเฉพาะที่ active !== false มาก่อน กันไปจับคู่กับโปรเจกต์ที่
+// ถูกรวมทิ้งไปแล้วก่อนหน้านี้)
+// คืนค่า: array ของกลุ่ม [{id, label}, ...] ที่มีชื่อซ้ำกันเป๊ะ (อย่างน้อย 2 รายการต่อกลุ่ม) — ยังไม่รวมจริง
+// ใช้เพื่อแสดงตัวอย่างให้แอดมินดูก่อนกดยืนยัน
+export function findExactDuplicateGroups(projects) {
+  const groups = new Map(); // normalized label -> [{id, label}, ...]
+  for (const p of projects || []) {
+    const label = (p.label || "").trim().replace(/\s+/g, " ");
+    if (!label) continue;
+    const norm = label.toLowerCase();
+    if (!groups.has(norm)) groups.set(norm, []);
+    groups.get(norm).push(p);
+  }
+  return Array.from(groups.values()).filter((g) => g.length > 1);
+}
+
+// รวมทุกกลุ่มที่ชื่อซ้ำเป๊ะให้เหลือกลุ่มละ 1 โปรเจกต์ (เรียก mergeProjectsGroup ให้อัตโนมัติทีละกลุ่ม)
+// targetLabel ของแต่ละกลุ่ม = รูปแบบการเขียน (ตัวพิมพ์เล็ก-ใหญ่/ช่องว่าง) ที่พบบ่อยที่สุดในกลุ่มนั้น
+// คืนค่า: array ของ { groupLabels, survivorId, survivorLabel, counts }
+export async function autoMergeExactDuplicateProjects(groups) {
+  const results = [];
+  for (const group of groups) {
+    const labelCounts = new Map();
+    for (const p of group) {
+      const label = (p.label || "").trim().replace(/\s+/g, " ");
+      labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
+    }
+    let targetLabel = group[0].label.trim().replace(/\s+/g, " ");
+    let bestCount = 0;
+    for (const [label, count] of labelCounts) {
+      if (count > bestCount) {
+        bestCount = count;
+        targetLabel = label;
+      }
+    }
+    const result = await mergeProjectsGroup(group, targetLabel);
+    results.push({ groupLabels: group.map((p) => p.label), ...result });
+  }
+  return results;
+}

@@ -6,7 +6,7 @@
 // ขอบเขตของไฟล์นี้ (ตามที่ตกลงกับผู้ใช้งาน): ดูรายการทั้งหมด + กำหนด/แก้ไขเลขที่ PO + ตรวจรับงาน
 // (ผ่าน/ไม่ผ่าน) ได้จากหน้านี้เลย ส่วนการ "สร้างงานส่งให้ผู้รับเหมา" และ "ตอบรับ/เสนอราคาของผู้รับเหมา"
 // ยังคงทำที่ repair-app เท่านั้น (ยังไม่มีความจำเป็นต้องย้ายมาที่นี่)
-import { db, collection, doc, addDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "./firebase-init.js";
+import { db, collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "./firebase-init.js";
 import { CONTRACTOR_JOBS_COLLECTION, LEGACY_PO_COLLECTION } from "./firebase-init.js";
 import { CONTRACTOR_JOB_STATUS, CONTRACTOR_JOB_TYPE, PO_FILE_MAX_BYTES } from "./config.js";
 import { createFreshApproval, approveApprovalStep, rejectApprovalStep, APPROVAL_STATUS } from "./approval.js";
@@ -18,6 +18,24 @@ export const NEGOTIATION_STATUS = {
   AWAITING_CONTRACTOR: "awaiting_contractor",
   AGREED: "agreed",
 };
+
+// ภาพส่งมอบงาน (แนบได้สูงสุด 20 ภาพ) เก็บแยกเป็น subcollection คนละใบต่อรูปของงานแต่ละชิ้น (เขียนโดย
+// repair-app ตอนผู้รับเหมากด "ส่งมอบงาน" — ดูเหตุผลละเอียดใน repair-app/js/contractor-jobs.js) ไม่ได้เก็บ
+// เป็น array ตรงในเอกสารงานเหมือนเดิมอีกต่อไป เพราะเอกสาร Firestore 1 ชิ้นมีเพดานขนาด 1MB จึงต้องโหลดรูป
+// แบบแยกต่างหากทุกจุดที่จะแสดงผล (ดู loadDeliveryPhotos ด้านล่าง)
+export const DELIVERY_PHOTOS_SUBCOLLECTION = "deliveryPhotos";
+
+// โหลดภาพส่งมอบงานทั้งหมดของงานนี้ — ดึงจาก subcollection ก่อนเป็นหลัก ถ้าไม่มี (เอกสารเก่าก่อนแก้ไขจุดนี้)
+// ค่อย fallback ไปใช้ field "deliveryImages" เดิมที่เก็บเป็น array ตรงในเอกสารงาน
+export async function loadDeliveryPhotos(jobId, legacyInlineImages) {
+  try {
+    const snap = await getDocs(query(collection(db, CONTRACTOR_JOBS_COLLECTION, jobId, DELIVERY_PHOTOS_SUBCOLLECTION), orderBy("order")));
+    if (!snap.empty) return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.error(e);
+  }
+  return legacyInlineImages || [];
+}
 
 // subscribe งานผู้รับเหมาทั้งหมด (ใหม่สุดก่อน) — ใช้ค่าเดียวกันไม่ว่าจะเปิดจากแอปไหน
 export function watchAllContractorJobs(cb, onErr) {

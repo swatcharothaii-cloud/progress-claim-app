@@ -85,6 +85,17 @@ service cloud.firestore {
       allow update: if true;
       // เปิดให้ลบถาวรได้จากหน้าแอดมิน (ตามคำขอ) — กดลบแล้วกู้คืนไม่ได้
       allow delete: if true;
+
+      // ภาพส่งมอบงาน — เก็บแยกเป็นเอกสารย่อยคนละใบต่อภาพ (แทนที่จะเป็น array ตรงในเอกสารงานด้านบน) เพราะ
+      // เอกสาร Firestore 1 ชิ้นมีเพดานขนาด 1MB ถ้าแนบภาพส่งมอบงานได้สูงสุด 20 ภาพรวมกับข้อมูลอื่นในเอกสารงาน
+      // (ภาพก่อนซ่อม/ไฟล์ PDF ใบสั่งซื้อที่แนบ) มีโอกาสสูงมากที่จะเกิน 1MB แล้วบันทึกไม่ผ่าน — เป็น subcollection
+      // ต้องมี match แยกต่างหาก ไม่ได้รับสิทธิ์ตาม match ด้านบนอัตโนมัติ (กติกา Firestore rules)
+      match /deliveryPhotos/{photoId} {
+        allow get: if true;
+        allow list: if true;
+        allow create: if true;
+        allow delete: if true;
+      }
     }
 
     // ---------------- คลังใบสั่งซื้อเก่าจาก PEAK (ใช้ร่วมกันทั้ง repair-app และ progress-claim-app) ----------------
