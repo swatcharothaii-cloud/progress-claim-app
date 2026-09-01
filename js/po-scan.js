@@ -3,22 +3,41 @@
 // ความแม่นยำที่น้อยกว่า OCR ภาษาไทยจากรูปถ่าย/สแกน (โดยเฉพาะลายมือหรือภาพเอียง/เบลอ) มีโอกาสอ่านผิดได้
 // พอสมควร — แอดมินต้องตรวจสอบ/แก้ไขฟิลด์ที่เดาไว้ในฟอร์ม "Add PO Manually" ก่อนกดบันทึกเสมอ (ดู admin.js)
 //
-// โหลดไลบรารีจาก CDN แบบ ESM ผ่าน jsDelivr (+esm) เพื่อไม่ต้องมีขั้นตอน build — สอดคล้องกับแนวทางเดิมของ
-// โปรเจกต์นี้ที่ import Firebase SDK ตรงจาก CDN เช่นกัน (ดู firebase-init.js)
+// ⚠️ แก้ไข (รอบ 2): เดิมโหลด Tesseract.js และ pdf.js ผ่านบริการแปลง CommonJS→ESM อัตโนมัติของ jsDelivr
+// ("https://cdn.jsdelivr.net/npm/<pkg>/+esm") ซึ่งพังจริงตอนใช้งาน — ทั้งสองไลบรารีมีโค้ดสำหรับ Node.js
+// ปนอยู่ (ใช้ตรวจสภาพแวดล้อมว่าเป็น Node หรือเบราว์เซอร์) พอผ่านการแปลงอัตโนมัติแล้วโค้ดส่วนนั้นไปเรียก
+// API เฉพาะของ Node.js (เช่น module.getBuiltinModule) ที่ไม่มีในเบราว์เซอร์ กลายเป็น error
+// "...getBuiltinModule is not a function" ตอนใช้งานจริง (ตามที่ผู้ใช้แจ้งมา)
+// วิธีแก้: เปลี่ยนมาใช้ไฟล์ build "ทางการ" ที่ผู้พัฒนาแต่ละไลบรารีแจกมาสำหรับใช้ในเบราว์เซอร์โดยตรง แทนการ
+// พึ่งบริการแปลงอัตโนมัติ — Tesseract.js ใช้ UMD build ผ่าน <script> tag ธรรมดา (วิธีที่เอกสารทางการแนะนำ)
+// ส่วน pdf.js ใช้ไฟล์ .mjs ที่เป็น ES module จริงของตัวเอง (import ตรงๆ ได้เลย ไม่ต้องผ่านตัวแปลงใดๆ)
 
-let tesseractPromise = null;
+// ---------------- โหลด Tesseract.js (UMD global ผ่าน <script> tag ธรรมดา) ----------------
+let tesseractLoadPromise = null;
 function loadTesseract() {
-  if (!tesseractPromise) {
-    tesseractPromise = import("https://cdn.jsdelivr.net/npm/tesseract.js@5/+esm");
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (!tesseractLoadPromise) {
+    tesseractLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      script.onload = () => {
+        if (window.Tesseract) resolve(window.Tesseract);
+        else reject(new Error("โหลด Tesseract.js สำเร็จ แต่ไม่พบ window.Tesseract / Loaded but window.Tesseract is missing"));
+      };
+      script.onerror = () =>
+        reject(new Error("โหลดไลบรารี OCR (Tesseract.js) ไม่สำเร็จ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต / Failed to load OCR library — check your internet connection"));
+      document.head.appendChild(script);
+    });
   }
-  return tesseractPromise;
+  return tesseractLoadPromise;
 }
 
+// ---------------- โหลด pdf.js (ไฟล์ ES module ทางการของ Mozilla ตรงๆ ไม่ผ่านตัวแปลงใดๆ) ----------------
 let pdfjsPromise = null;
 function loadPdfjs() {
   if (!pdfjsPromise) {
-    pdfjsPromise = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4/+esm").then((mod) => {
-      mod.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.worker.min.mjs";
+    pdfjsPromise = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.mjs").then((mod) => {
+      mod.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.worker.mjs";
       return mod;
     });
   }
@@ -56,8 +75,8 @@ export async function ocrPoDocument(file, onProgress) {
   if (onProgress) onProgress(null, isPdf ? "Rendering PDF page 1 / กำลังแปลงหน้า PDF" : "Loading image / กำลังโหลดรูป");
   const imageDataUrl = isPdf ? await pdfFirstPageToDataUrl(file) : await readFileAsDataUrl(file);
 
-  const TesseractMod = await loadTesseract();
-  const Tesseract = TesseractMod.default || TesseractMod;
+  if (onProgress) onProgress(null, "Loading OCR engine / กำลังโหลดตัวอ่าน OCR");
+  const Tesseract = await loadTesseract();
   const result = await Tesseract.recognize(imageDataUrl, "tha+eng", {
     logger: (m) => {
       if (onProgress && m && m.status) {
