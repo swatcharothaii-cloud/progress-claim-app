@@ -43,144 +43,172 @@
     <a href="track.html" target="_blank" class="btn btn-outline btn-sm" style="white-space:nowrap;">🔎 Public Status Page / หน้าตรวจสอบสถานะ / 状态查询页面</a>
   </div>
 
-  <div class="stat-grid" id="stat-grid"></div>
+  <!-- ============ TAB BAR — สลับดูแต่ละฟังก์ชันแยกกัน ไม่ต้องเลื่อนหน้ายาวปนกันแบบเดิม ============ -->
+  <nav class="admin-tabbar" id="admin-tabbar">
+    <button type="button" class="tab-btn" data-tab="overview">📊 Overview / ภาพรวม / 总览</button>
+    <button type="button" class="tab-btn" data-tab="claims">🧾 Progress Claims / เบิกงวดงาน / 工程款申请</button>
+    <button type="button" class="tab-btn" data-tab="contractor-jobs">🚚 Contractor Jobs / งานผู้รับเหมา / 承包商工程</button>
+    <button type="button" class="tab-btn" data-tab="legacy-po">📜 PO Archive / คลัง PO เก่า / PO存档</button>
+    <button type="button" class="tab-btn" data-tab="projects">📁 Projects / โปรเจกต์ / 项目</button>
+    <button type="button" class="tab-btn" data-tab="admins">🧑‍💼 Admins / แอดมิน / 管理员</button>
+  </nav>
 
-  <details class="chart-card" id="project-manager">
-    <summary style="cursor:pointer; font-weight:600; font-size:15px;">📁 Manage Projects / จัดการโปรเจกต์ / 管理项目</summary>
-    <div style="margin-top:16px;">
-      <form id="project-add-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
-        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
-          <label>Project Name (Thai) * / ชื่อโปรเจกต์ (ไทย) * / 项目名称（泰文）*</label>
-          <input type="text" id="proj-label" placeholder="e.g. Building A Renovation / เช่น โครงการปรับปรุงอาคาร A" required>
-        </div>
-        <div class="field" style="flex:0 0 80px; margin-bottom:0;">
-          <label>Color / สี / 颜色</label>
-          <input type="color" id="proj-color" value="#4f46e5" style="padding:2px; height:38px; width:100%;">
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
-      </form>
-      <div id="project-manage-list"></div>
-      <p class="hint" style="margin-top:12px;">รายชื่อโปรเจกต์ใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบ</p>
+  <!-- ============ TAB: OVERVIEW ============ -->
+  <div class="tab-panel" data-tab="overview">
+    <div class="stat-grid" id="stat-grid"></div>
+  </div>
 
-      <div id="project-auto-merge-tool" style="margin-top:16px; padding:12px 14px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:12px;">
-        <div style="font-weight:600; margin-bottom:8px;">🔍 Auto-merge Exact-Duplicate Names / รวมชื่อซ้ำอัตโนมัติ / 自动合并完全重名项目</div>
-        <p class="hint">Finds projects whose names match exactly (ignoring case and extra spaces — e.g. "Plus City" and "plus city ") and merges each group into one automatically. It will NOT catch similar-but-different names like "Plus City" vs "Plus City Condo" — use "Merge selected" below for those. All historical data gets moved over the same way; merged-away projects are disabled, not deleted. / ค้นหาโปรเจกต์ที่ชื่อตรงกันเป๊ะ (ไม่สนตัวพิมพ์เล็ก-ใหญ่และช่องว่างเกิน เช่น "Plus City" กับ "plus city ") แล้วรวมแต่ละกลุ่มให้อัตโนมัติ — จะไม่จับชื่อที่ "คล้ายกัน" แต่ไม่ตรงเป๊ะ เช่น "Plus City" กับ "Plus City Condo" กรณีนั้นใช้เครื่องมือ "Merge selected" ด้านล่างแทน ข้อมูลเก่าย้ายให้อัตโนมัติเหมือนกัน โปรเจกต์ที่ถูกรวมทิ้งจะถูกปิดใช้งาน ไม่ได้ลบถาวร</p>
-        <button type="button" class="btn btn-primary btn-sm" id="proj-auto-merge-btn">🔍 Find &amp; merge exact duplicates / ค้นหาและรวมชื่อซ้ำ</button>
-        <p class="hint" id="proj-auto-merge-result" style="margin-top:8px;"></p>
+  <!-- ============ TAB: PROJECTS ============ -->
+  <div class="tab-panel" data-tab="projects">
+    <div class="chart-card" id="project-manager">
+      <div class="chart-card-title">📁 Manage Projects / จัดการโปรเจกต์ / 管理项目</div>
+      <div>
+        <form id="project-add-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+          <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+            <label>Project Name (Thai) * / ชื่อโปรเจกต์ (ไทย) * / 项目名称（泰文）*</label>
+            <input type="text" id="proj-label" placeholder="e.g. Building A Renovation / เช่น โครงการปรับปรุงอาคาร A" required>
+          </div>
+          <div class="field" style="flex:0 0 80px; margin-bottom:0;">
+            <label>Color / สี / 颜色</label>
+            <input type="color" id="proj-color" value="#4f46e5" style="padding:2px; height:38px; width:100%;">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
+        </form>
+        <div id="project-manage-list"></div>
+        <p class="hint" style="margin-top:12px;">รายชื่อโปรเจกต์ใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบ</p>
+
+        <div id="project-auto-merge-tool" style="margin-top:16px; padding:12px 14px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:12px;">
+          <div style="font-weight:600; margin-bottom:8px;">🔍 Auto-merge Exact-Duplicate Names / รวมชื่อซ้ำอัตโนมัติ / 自动合并完全重名项目</div>
+          <p class="hint">Finds projects whose names match exactly (ignoring case and extra spaces — e.g. "Plus City" and "plus city ") and merges each group into one automatically. It will NOT catch similar-but-different names like "Plus City" vs "Plus City Condo" — use "Merge selected" below for those. All historical data gets moved over the same way; merged-away projects are disabled, not deleted. / ค้นหาโปรเจกต์ที่ชื่อตรงกันเป๊ะ (ไม่สนตัวพิมพ์เล็ก-ใหญ่และช่องว่างเกิน เช่น "Plus City" กับ "plus city ") แล้วรวมแต่ละกลุ่มให้อัตโนมัติ — จะไม่จับชื่อที่ "คล้ายกัน" แต่ไม่ตรงเป๊ะ เช่น "Plus City" กับ "Plus City Condo" กรณีนั้นใช้เครื่องมือ "Merge selected" ด้านล่างแทน ข้อมูลเก่าย้ายให้อัตโนมัติเหมือนกัน โปรเจกต์ที่ถูกรวมทิ้งจะถูกปิดใช้งาน ไม่ได้ลบถาวร</p>
+          <button type="button" class="btn btn-primary btn-sm" id="proj-auto-merge-btn">🔍 Find &amp; merge exact duplicates / ค้นหาและรวมชื่อซ้ำ</button>
+          <p class="hint" id="proj-auto-merge-result" style="margin-top:8px;"></p>
+        </div>
+
+        <div id="project-merge-tool" style="margin-top:16px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border); border-radius:12px;">
+          <div style="font-weight:600; margin-bottom:8px;">🔀 Merge Duplicate Projects / รวมโปรเจกต์ที่ซ้ำกัน / 合并重复项目</div>
+          <p class="hint">Tick 2 or more projects above that are actually the same place, then type the name to merge them into below (type a brand-new name, or match one of the ticked projects' names exactly to keep using that name). All historical data — repair tickets, contractor jobs/POs, PEAK archive, progress claims — gets moved over automatically. This can't be undone (merged-away projects are disabled, not deleted). / ติ๊กเลือกโปรเจกต์ด้านบนตั้งแต่ 2 รายการขึ้นไปที่จริงๆ แล้วเป็นที่เดียวกัน แล้วพิมพ์ชื่อที่จะรวมเป็นด้านล่างนี้ (ตั้งชื่อใหม่ก็ได้ หรือพิมพ์ให้ตรงกับชื่อของโปรเจกต์ที่ติ๊กไว้อันหนึ่งเพื่อคงชื่อนั้นไว้) ข้อมูลเก่าทั้งหมด — งานแจ้งซ่อม/งานผู้รับเหมา-PO/คลัง PEAK/ใบเบิกงวดงาน — จะถูกย้ายมาให้อัตโนมัติ กู้คืนไม่ได้ (โปรเจกต์ที่ถูกรวมทิ้งจะถูกปิดใช้งาน ไม่ได้ลบถาวร)</p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+            <input type="text" id="proj-merge-target-label" placeholder="Target name / ชื่อที่จะรวมเป็น" style="flex:1; min-width:200px;">
+            <button type="button" class="btn btn-primary btn-sm" id="proj-merge-btn">🔀 Merge selected / รวมที่เลือกไว้</button>
+          </div>
+          <p class="hint" id="proj-merge-result" style="margin-top:8px;"></p>
+        </div>
       </div>
+    </div>
+  </div>
 
-      <div id="project-merge-tool" style="margin-top:16px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border); border-radius:12px;">
-        <div style="font-weight:600; margin-bottom:8px;">🔀 Merge Duplicate Projects / รวมโปรเจกต์ที่ซ้ำกัน / 合并重复项目</div>
-        <p class="hint">Tick 2 or more projects above that are actually the same place, then type the name to merge them into below (type a brand-new name, or match one of the ticked projects' names exactly to keep using that name). All historical data — repair tickets, contractor jobs/POs, PEAK archive, progress claims — gets moved over automatically. This can't be undone (merged-away projects are disabled, not deleted). / ติ๊กเลือกโปรเจกต์ด้านบนตั้งแต่ 2 รายการขึ้นไปที่จริงๆ แล้วเป็นที่เดียวกัน แล้วพิมพ์ชื่อที่จะรวมเป็นด้านล่างนี้ (ตั้งชื่อใหม่ก็ได้ หรือพิมพ์ให้ตรงกับชื่อของโปรเจกต์ที่ติ๊กไว้อันหนึ่งเพื่อคงชื่อนั้นไว้) ข้อมูลเก่าทั้งหมด — งานแจ้งซ่อม/งานผู้รับเหมา-PO/คลัง PEAK/ใบเบิกงวดงาน — จะถูกย้ายมาให้อัตโนมัติ กู้คืนไม่ได้ (โปรเจกต์ที่ถูกรวมทิ้งจะถูกปิดใช้งาน ไม่ได้ลบถาวร)</p>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:8px;">
-          <input type="text" id="proj-merge-target-label" placeholder="Target name / ชื่อที่จะรวมเป็น" style="flex:1; min-width:200px;">
-          <button type="button" class="btn btn-primary btn-sm" id="proj-merge-btn">🔀 Merge selected / รวมที่เลือกไว้</button>
-        </div>
-        <p class="hint" id="proj-merge-result" style="margin-top:8px;"></p>
+  <!-- ============ TAB: ADMINS ============ -->
+  <div class="tab-panel" data-tab="admins">
+    <div class="chart-card" id="admin-manager">
+      <div class="chart-card-title">🧑‍💼 Manage Admins / จัดการรายชื่อแอดมิน / 管理管理员名单</div>
+      <div>
+        <form id="admin-add-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+          <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+            <label>Admin Name * / ชื่อแอดมิน * / 管理员姓名 *</label>
+            <input type="text" id="admin-name" placeholder="e.g. K.Nueng / เช่น คุณหนึ่ง" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
+        </form>
+        <div id="admin-manage-list"></div>
+        <p class="hint" style="margin-top:12px;">รายชื่อแอดมินใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบทันที การปิดใช้งานจะซ่อนจากหน้าเลือกชื่อ แต่ชื่อยังอยู่ในรายการเก่าที่เคยแก้ไขไว้เหมือนเดิม</p>
       </div>
     </div>
-  </details>
+  </div>
 
-  <details class="chart-card" id="admin-manager">
-    <summary style="cursor:pointer; font-weight:600; font-size:15px;">🧑‍💼 Manage Admins / จัดการรายชื่อแอดมิน / 管理管理员名单</summary>
-    <div style="margin-top:16px;">
-      <form id="admin-add-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
-        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
-          <label>Admin Name * / ชื่อแอดมิน * / 管理员姓名 *</label>
-          <input type="text" id="admin-name" placeholder="e.g. K.Nueng / เช่น คุณหนึ่ง" required>
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;">+ Add / เพิ่ม / 添加</button>
-      </form>
-      <div id="admin-manage-list"></div>
-      <p class="hint" style="margin-top:12px;">รายชื่อแอดมินใช้ร่วมกับระบบแจ้งซ่อม (repair-app) — เพิ่ม/แก้ไขที่นี่จะมีผลกับทั้งสองระบบทันที การปิดใช้งานจะซ่อนจากหน้าเลือกชื่อ แต่ชื่อยังอยู่ในรายการเก่าที่เคยแก้ไขไว้เหมือนเดิม</p>
+  <!-- ============ TAB: CONTRACTOR JOBS ============ -->
+  <div class="tab-panel" data-tab="contractor-jobs">
+    <div class="chart-card" id="contractor-jobs-section">
+      <div class="chart-card-title">🚚 Contractor Jobs — PO / Delivery / Inspection / งานผู้รับเหมา — PO / ส่งมอบงาน / ตรวจรับ / 承包商工程－PO／交付／验收</div>
+      <p class="hint">ข้อมูลนี้ดึงมาจากระบบแจ้งซ่อม (repair-app) โดยตรงแบบเรียลไทม์ กรองตามโปรเจกต์ที่เลือกไว้ด้านบนให้อัตโนมัติ ไม่ต้องกรอกซ้ำ — This is live data from the repair-app system, auto-filtered by the project selected above; no need to re-enter anything.</p>
+      <div class="table-wrap" style="margin-top:12px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Job No. / เลขที่งาน / 工程编号</th>
+              <th>Type / ประเภทงาน / 类型</th>
+              <th>Project / โปรเจกต์ / 项目</th>
+              <th>Contractor / ผู้รับเหมา / 承包商</th>
+              <th>Status / สถานะ / 状态</th>
+              <th style="width:190px;">PO / Delivery / เลขที่ PO / ส่งมอบงาน / PO单／交付</th>
+              <th style="width:90px;">View / ดู / 查看</th>
+            </tr>
+          </thead>
+          <tbody id="cj-tbody"></tbody>
+        </table>
+      </div>
+      <div id="empty-cj-state"></div>
     </div>
-  </details>
+  </div>
 
-  <details class="chart-card" id="contractor-jobs-section" open>
-    <summary style="cursor:pointer; font-weight:600; font-size:15px;">🚚 Contractor Jobs — PO / Delivery / Inspection / งานผู้รับเหมา — PO / ส่งมอบงาน / ตรวจรับ / 承包商工程－PO／交付／验收</summary>
-    <p class="hint" style="margin-top:10px;">ข้อมูลนี้ดึงมาจากระบบแจ้งซ่อม (repair-app) โดยตรงแบบเรียลไทม์ กรองตามโปรเจกต์ที่เลือกไว้ด้านบนให้อัตโนมัติ ไม่ต้องกรอกซ้ำ — This is live data from the repair-app system, auto-filtered by the project selected above; no need to re-enter anything.</p>
-    <div class="table-wrap" style="margin-top:12px;">
-      <table>
-        <thead>
-          <tr>
-            <th>Job No. / เลขที่งาน / 工程编号</th>
-            <th>Type / ประเภทงาน / 类型</th>
-            <th>Project / โปรเจกต์ / 项目</th>
-            <th>Contractor / ผู้รับเหมา / 承包商</th>
-            <th>Status / สถานะ / 状态</th>
-            <th style="width:190px;">PO / Delivery / เลขที่ PO / ส่งมอบงาน / PO单／交付</th>
-            <th style="width:90px;">View / ดู / 查看</th>
-          </tr>
-        </thead>
-        <tbody id="cj-tbody"></tbody>
-      </table>
+  <!-- ============ TAB: LEGACY PO ARCHIVE ============ -->
+  <div class="tab-panel" data-tab="legacy-po">
+    <div class="chart-card" id="legacy-po-section">
+      <div class="chart-card-title">📜 Purchase Order Archive (PEAK Import) / คลังใบสั่งซื้อเก่าจาก PEAK / PEAK采购单存档</div>
+      <p class="hint">ใบสั่งซื้อเก่าที่เคยออกผ่านโปรแกรมบัญชี PEAK ก่อนจะมีระบบนี้ — นำเข้าครั้งเดียว แยกตามโปรเจกต์ให้อัตโนมัติ กรองตามโปรเจกต์ที่เลือกไว้ด้านบนได้เหมือนกับส่วนอื่นๆ / Legacy PO documents issued via PEAK before this system existed — import once, auto-grouped by project.</p>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:12px 0;">
+        <button class="btn btn-primary btn-sm" id="import-legacy-po-btn">📥 Import from PEAK / นำเข้าจาก PEAK / 从PEAK导入</button>
+        <button class="btn btn-outline btn-sm" id="import-legacy-po-excel-btn">📤 Import from Excel / นำเข้าจากไฟล์ Excel / 从Excel导入</button>
+        <button class="btn btn-outline btn-sm" id="add-legacy-po-manual-btn">✏️ Add PO Manually / เพิ่ม PO เอง / 手动添加PO</button>
+        <button class="btn btn-outline btn-sm" id="scan-po-btn">📷 Scan PO (Photo/PDF) / สแกน PO จากรูป/PDF / 扫描PO（照片/PDF）</button>
+        <input type="file" id="scan-po-file-input" accept="image/*,application/pdf" style="display:none">
+        <span class="hint" id="legacy-po-import-status"></span>
+        <span class="hint" id="scan-po-status"></span>
+      </div>
+      <p class="hint" style="margin-top:-6px;">📷 สแกน PO ด้วยการแนบรูปถ่ายหรือไฟล์ PDF — ระบบจะอ่านข้อความด้วย OCR ฟรีในเบราว์เซอร์แล้วลองเติมฟอร์มให้อัตโนมัติ (ฟรี ไม่มีค่าใช้จ่าย แต่ความแม่นยำจำกัด โดยเฉพาะภาษาไทยจากรูปถ่าย) กรุณาตรวจสอบทุกฟิลด์ก่อนบันทึกเสมอ / Scan a PO by attaching a photo or PDF — the system reads it with free in-browser OCR and tries to auto-fill the form (free, but limited accuracy, especially for Thai text from photos). Always review every field before saving.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>PO No. / เลขที่เอกสาร / 单号</th>
+              <th>Date / วันที่ / 日期</th>
+              <th>Project / โปรเจกต์ / 项目</th>
+              <th>Contractor / ช่างประจำ / 承包商</th>
+              <th>Vendor / ผู้ขาย / 供应商</th>
+              <th>Total / มูลค่ารวม / 总额</th>
+              <th>Status / สถานะ / 状态</th>
+              <th style="width:70px;">View / ดู / 查看</th>
+            </tr>
+          </thead>
+          <tbody id="legacy-po-tbody"></tbody>
+        </table>
+      </div>
+      <div id="empty-legacy-po-state"></div>
     </div>
-    <div id="empty-cj-state"></div>
-  </details>
+  </div>
 
-  <details class="chart-card" id="legacy-po-section">
-    <summary style="cursor:pointer; font-weight:600; font-size:15px;">📜 Purchase Order Archive (PEAK Import) / คลังใบสั่งซื้อเก่าจาก PEAK / PEAK采购单存档</summary>
-    <p class="hint" style="margin-top:10px;">ใบสั่งซื้อเก่าที่เคยออกผ่านโปรแกรมบัญชี PEAK ก่อนจะมีระบบนี้ — นำเข้าครั้งเดียว แยกตามโปรเจกต์ให้อัตโนมัติ กรองตามโปรเจกต์ที่เลือกไว้ด้านบนได้เหมือนกับส่วนอื่นๆ / Legacy PO documents issued via PEAK before this system existed — import once, auto-grouped by project.</p>
-    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:12px 0;">
-      <button class="btn btn-primary btn-sm" id="import-legacy-po-btn">📥 Import from PEAK / นำเข้าจาก PEAK / 从PEAK导入</button>
-      <button class="btn btn-outline btn-sm" id="import-legacy-po-excel-btn">📤 Import from Excel / นำเข้าจากไฟล์ Excel / 从Excel导入</button>
-      <button class="btn btn-outline btn-sm" id="add-legacy-po-manual-btn">✏️ Add PO Manually / เพิ่ม PO เอง / 手动添加PO</button>
-      <button class="btn btn-outline btn-sm" id="scan-po-btn">📷 Scan PO (Photo/PDF) / สแกน PO จากรูป/PDF / 扫描PO（照片/PDF）</button>
-      <input type="file" id="scan-po-file-input" accept="image/*,application/pdf" style="display:none">
-      <span class="hint" id="legacy-po-import-status"></span>
-      <span class="hint" id="scan-po-status"></span>
+  <!-- ============ TAB: PROGRESS CLAIMS ============ -->
+  <div class="tab-panel" data-tab="claims">
+    <div class="filter-bar">
+      <select id="filter-status">
+        <option value="">All Statuses / สถานะทั้งหมด / 全部状态</option>
+      </select>
+      <input type="text" id="filter-search" placeholder="Search work item / claim no... / ค้นหารายการงาน / เลขที่เบิก... / 搜索工程项目／单号…">
+      <button class="btn btn-primary btn-sm" id="add-claim-btn" style="white-space:nowrap;">+ Add Progress Claim / เพิ่มรายการเบิกงวดงาน / 新增申请</button>
+      <button class="btn btn-outline btn-sm" id="export-excel-btn" style="white-space:nowrap;">📊 Export Excel / ส่งออก Excel / 导出 Excel</button>
+      <button class="btn btn-outline btn-sm" id="export-pdf-btn" style="white-space:nowrap;">📄 Export PDF / ส่งออก PDF / 导出 PDF</button>
     </div>
-    <p class="hint" style="margin-top:-6px;">📷 สแกน PO ด้วยการแนบรูปถ่ายหรือไฟล์ PDF — ระบบจะอ่านข้อความด้วย OCR ฟรีในเบราว์เซอร์แล้วลองเติมฟอร์มให้อัตโนมัติ (ฟรี ไม่มีค่าใช้จ่าย แต่ความแม่นยำจำกัด โดยเฉพาะภาษาไทยจากรูปถ่าย) กรุณาตรวจสอบทุกฟิลด์ก่อนบันทึกเสมอ / Scan a PO by attaching a photo or PDF — the system reads it with free in-browser OCR and tries to auto-fill the form (free, but limited accuracy, especially for Thai text from photos). Always review every field before saving.</p>
+
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>PO No. / เลขที่เอกสาร / 单号</th>
-            <th>Date / วันที่ / 日期</th>
+            <th style="width:64px;">Photo / รูป / 照片</th>
+            <th>Claim No. / เลขที่เบิก / 单号</th>
             <th>Project / โปรเจกต์ / 项目</th>
-            <th>Contractor / ช่างประจำ / 承包商</th>
-            <th>Vendor / ผู้ขาย / 供应商</th>
-            <th>Total / มูลค่ารวม / 总额</th>
+            <th>Work Item / รายการงาน / 工程项目</th>
+            <th>PO / Delivery Note / เลขที่ PO/ใบส่งมอบงาน / PO/交付单号</th>
+            <th>Progress / ความคืบหน้า / 进度</th>
+            <th>Amount / จำนวนเงิน / 金额</th>
+            <th>Date / วันที่ / 日期</th>
             <th>Status / สถานะ / 状态</th>
-            <th style="width:70px;">View / ดู / 查看</th>
+            <th style="width:150px;">Actions / จัดการ / 操作</th>
           </tr>
         </thead>
-        <tbody id="legacy-po-tbody"></tbody>
+        <tbody id="claims-tbody"></tbody>
       </table>
     </div>
-    <div id="empty-legacy-po-state"></div>
-  </details>
-
-  <div class="filter-bar">
-    <select id="filter-status">
-      <option value="">All Statuses / สถานะทั้งหมด / 全部状态</option>
-    </select>
-    <input type="text" id="filter-search" placeholder="Search work item / claim no... / ค้นหารายการงาน / เลขที่เบิก... / 搜索工程项目／单号…">
-    <button class="btn btn-primary btn-sm" id="add-claim-btn" style="white-space:nowrap;">+ Add Progress Claim / เพิ่มรายการเบิกงวดงาน / 新增申请</button>
-    <button class="btn btn-outline btn-sm" id="export-excel-btn" style="white-space:nowrap;">📊 Export Excel / ส่งออก Excel / 导出 Excel</button>
-    <button class="btn btn-outline btn-sm" id="export-pdf-btn" style="white-space:nowrap;">📄 Export PDF / ส่งออก PDF / 导出 PDF</button>
+    <div id="empty-table-state"></div>
   </div>
-
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th style="width:64px;">Photo / รูป / 照片</th>
-          <th>Claim No. / เลขที่เบิก / 单号</th>
-          <th>Project / โปรเจกต์ / 项目</th>
-          <th>Work Item / รายการงาน / 工程项目</th>
-          <th>PO / Delivery Note / เลขที่ PO/ใบส่งมอบงาน / PO/交付单号</th>
-          <th>Progress / ความคืบหน้า / 进度</th>
-          <th>Amount / จำนวนเงิน / 金额</th>
-          <th>Date / วันที่ / 日期</th>
-          <th>Status / สถานะ / 状态</th>
-          <th style="width:150px;">Actions / จัดการ / 操作</th>
-        </tr>
-      </thead>
-      <tbody id="claims-tbody"></tbody>
-    </table>
-  </div>
-  <div id="empty-table-state"></div>
 </div>
 
 <!-- ============ ADD / EDIT MODAL ============ -->
