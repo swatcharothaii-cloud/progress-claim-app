@@ -28,6 +28,35 @@ import { ensureApproval, renderApprovalStepper, APPROVAL_STATUS, APPROVAL_STEP_D
 renderCompanyBrandBar("brand-bar", COMPANY);
 
 // ============================================================
+//  แถบแท็บเมนูด้านบน (admin.html) — สลับดูแต่ละฟังก์ชันแยกกัน ไม่ต้องเลื่อนหน้ายาวปนกันแบบเดิม
+//  จำแท็บล่าสุดไว้ใน localStorage เพื่อความสะดวก (เปิดหน้าใหม่แล้วอยู่แท็บเดิม)
+// ============================================================
+const ADMIN_TAB_STORAGE_KEY = "progressClaimAdminActiveTab";
+(function initAdminTabs() {
+  const tabBtns = Array.from(document.querySelectorAll(".admin-tabbar .tab-btn"));
+  const panels = Array.from(document.querySelectorAll(".tab-panel"));
+  if (!tabBtns.length || !panels.length) return;
+
+  function activateTab(tabName) {
+    const target = tabBtns.some((b) => b.dataset.tab === tabName) ? tabName : tabBtns[0].dataset.tab;
+    tabBtns.forEach((b) => b.classList.toggle("active", b.dataset.tab === target));
+    panels.forEach((p) => p.classList.toggle("active", p.dataset.tab === target));
+    try { localStorage.setItem(ADMIN_TAB_STORAGE_KEY, target); } catch {}
+  }
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+  });
+
+  let initial = "overview";
+  try {
+    const stored = localStorage.getItem(ADMIN_TAB_STORAGE_KEY);
+    if (stored && tabBtns.some((b) => b.dataset.tab === stored)) initial = stored;
+  } catch {}
+  activateTab(initial);
+})();
+
+// ============================================================
 //  ระบุตัวตนด้วยการ "เลือกชื่อ" — เหมือน repair-app (ไม่ใช่ระบบล็อกอินจริง)
 //  รายชื่อแอดมิน (admins) โหลดจาก Firestore ผ่าน js/admins.js — ใช้ collection เดียวกับ repair-app
 //  (เพิ่ม/แก้ไข/ปิดใช้งานได้เองจากหัวข้อ "จัดการรายชื่อแอดมิน" ในแดชบอร์ด มีผลกับทั้งสองระบบทันที)
