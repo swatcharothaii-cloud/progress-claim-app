@@ -802,6 +802,56 @@ details.chart-card:not([open]) summary::after,
 .project-switch-bar label { font-size: 13.5px; font-weight: 600; white-space: nowrap; }
 .project-switch-bar select { flex: 1; min-width: 200px; }
 
+/* ---------- แถบแท็บเมนูของหน้าแอดมิน (admin.html) — สลับดูแต่ละฟังก์ชันแยกกัน ---------- */
+.admin-tabbar {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 6px;
+  margin-bottom: var(--section-gap);
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.admin-tabbar::-webkit-scrollbar { display: none; }
+.tab-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background .12s ease, color .12s ease;
+}
+.tab-btn:hover { background: var(--primary-light); color: var(--primary-dark); }
+.tab-btn.active {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(79,70,229,.28);
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.chart-card-title {
+  font-weight: 600;
+  font-size: 15px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
 /* ============================================================
    Approval Stepper — แถบแสดงขั้นตอนอนุมัติ 4 ขั้น ใช้ร่วมกันทั้งระบบ
    (การเบิกงวดงาน / ตรวจรับงานผู้รับเหมา / ใบส่งมอบงาน PO เก่า)
